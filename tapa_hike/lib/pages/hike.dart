@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:tapa_hike/services/socket.dart';
+import 'package:tapa_hike/services/location.dart';
 
 import 'package:tapa_hike/widgets/loading.dart';
 import 'package:tapa_hike/widgets/routes.dart';
@@ -14,13 +15,14 @@ class HikePage extends StatefulWidget {
 
 class _HikePageState extends State<HikePage> {
   Map? hikeData;
-  List Destinations = [];
+  List destinations = [];
 
   void receiveHikeData () async {
     socketConnection.sendJson({"type": "request", "data": "newLocation"});
     socketConnection.listenOnce(socketConnection.routeStream).then((event) {
       setState(() {
         hikeData = event;
+        destinations = parseDestinations(hikeData!["data"]["coordinates"]);
       });
     });
   }
@@ -34,6 +36,6 @@ class _HikePageState extends State<HikePage> {
       return LoadingWidget();
     }
 
-    return hikeTypeWidgets[hikeData!["type"]](hikeData!["data"]);
+    return hikeTypeWidgets[hikeData!["type"]](hikeData!["data"], destinations);
   }
 }
