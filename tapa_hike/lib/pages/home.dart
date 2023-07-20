@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
+
 import 'package:tapa_hike/services/socket.dart';
 
 class HomePage extends StatelessWidget {
@@ -14,10 +17,20 @@ class HomePage extends StatelessWidget {
           child: TextFormField(
             decoration: const InputDecoration(
               border: UnderlineInputBorder(),
-              labelText: 'Voer hier je TEAM ID in...',
+              labelText: 'TEAM ID',
             ),
-            onFieldSubmitted: (authStr) {
+            onFieldSubmitted: (authStr) async {
               socketConnection.authenticate(authStr);
+              var serviceEnabled = await Geolocator.isLocationServiceEnabled();
+              var permission = await Geolocator.checkPermission();
+              if (!serviceEnabled || ([
+                LocationPermission.denied,
+                LocationPermission.deniedForever,
+                LocationPermission.unableToDetermine
+              ].contains(permission))) {
+                // niet de juiste locatie permisies
+                return;
+              }
               Navigator.pushReplacementNamed(context, "/hike");
             },
           ),

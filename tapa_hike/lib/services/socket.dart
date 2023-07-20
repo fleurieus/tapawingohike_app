@@ -7,8 +7,8 @@ class SocketConnection {
   late final WebSocketChannel channel;
   late final Stream mainStream;
 
-  final StreamController routeStreamController = StreamController.broadcast();
-  get routeStream => routeStreamController.stream;
+  final StreamController locationStreamController = StreamController.broadcast();
+  get locationStream => locationStreamController.stream;
 
 
   SocketConnection () {
@@ -16,7 +16,7 @@ class SocketConnection {
     mainStream = channel.stream.map((event) => json.decode(event));
     
     final Map channelMapping = {
-      "route": routeStreamController,
+      "route": locationStreamController,
     };
     
     mainStream.listen((event) {
@@ -28,9 +28,9 @@ class SocketConnection {
     channel.sink.add(json.encode(data));
   }
 
-  Future<dynamic> listenOnce(stream) {
-    final completer = Completer<dynamic>();
-    late StreamSubscription<dynamic> subscription;
+  Future listenOnce(stream) {
+    final completer = Completer();
+    late StreamSubscription subscription;
 
     subscription = stream.listen((event) {
       subscription.cancel();
