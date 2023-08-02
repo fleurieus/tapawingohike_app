@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+const String domain = "127.0.0.1:8000";
+
 class SocketConnection {
   late final WebSocketChannel channel;
   late final Stream mainStream;
@@ -12,7 +14,7 @@ class SocketConnection {
 
 
   SocketConnection () {
-    channel = WebSocketChannel.connect(Uri.parse('ws://127.0.0.1:8000/ws/app/'));
+    channel = WebSocketChannel.connect(Uri.parse('ws://$domain/ws/app/'));
     mainStream = channel.stream.map((event) => json.decode(event));
     
     final Map channelMapping = {
@@ -42,7 +44,7 @@ class SocketConnection {
 
   void authenticate(authStr) {
     sendJson({
-      "type": "authenticate",
+      "endpoint": "authenticate",
       "data": {
         "authStr": authStr.toString(),
       },

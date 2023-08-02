@@ -8,7 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map_location_marker/flutter_map_location_marker.dart';
 
 
-Map locationConfirmdData (id) => {"type": "destinationUpdate", "data": {"id": id, "action": "confirmed"}};
+Map locationConfirmdData (id) => {"endpoint": "destinationConfirmed", "data": {"id": id}};
 
 List parseDestinations (List coordinates) {
   return coordinates.map((c) => Destination(

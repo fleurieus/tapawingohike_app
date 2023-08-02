@@ -33,7 +33,7 @@ class _HikePageState extends State<HikePage> {
 
   void sendLastLocationData () {
     socketConnection.sendJson({
-      "type": "locationUpdate",
+      "endpoint": "updateLocation",
       "data": {
         "lat": lastLocation.latitude,
         "lng": lastLocation.longitude
@@ -42,7 +42,7 @@ class _HikePageState extends State<HikePage> {
   }
 
   void receiveHikeData () async {
-    socketConnection.sendJson({"type": "request", "data": "newLocation"});
+    socketConnection.sendJson({"endpoint": "newLocation"});
     socketConnection.listenOnce(socketConnection.locationStream).then((event) {
       setState(() {
         hikeData = event;
@@ -70,7 +70,7 @@ class _HikePageState extends State<HikePage> {
 
 
   void setupLocationThings () async {
-    if (showConfirm) return;
+    if (showConfirm || destinations == []) return;
 
     // before destination reached but hiking
     startCronjob(sendLastLocationData, 1);
@@ -85,7 +85,7 @@ class _HikePageState extends State<HikePage> {
         showConfirm = destination.confirmByUser;
       });
     } else {
-      socketConnection.sendJson(locationConfirmdData(reachedLocationId));
+      socketConnection.sendJson(locationConfirmdData(destination.id));
       resetHikeData();
     }
   }
@@ -109,7 +109,7 @@ class _HikePageState extends State<HikePage> {
           socketConnection.sendJson(locationConfirmdData(reachedLocationId));
           resetHikeData();
         },
-        child: const Icon(Icons.arrow_right_outlined, size: 50),
+        child: const Icon(Icons.check_outlined, size: 45),
       ) : null,
     );
   }
