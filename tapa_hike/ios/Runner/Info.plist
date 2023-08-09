@@ -3,6 +3,19 @@
 <plist version="1.0">
 <dict>
 
+	<!-- Background Processing -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>processing</string>
+		<string>fetch</string>
+	</array>
+
+	<!-- Task Schedulling -->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>workmanager.background.task</string>
+	</array>
+
 	<!-- Permission options for the location` group -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Need location when in use</string> <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

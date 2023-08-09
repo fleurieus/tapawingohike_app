@@ -35,6 +35,7 @@ Widget widgetCoordinate (data, destinations) {
 }
 
 Widget widgetImage (data) {
+  print(data["image"]);
   if (data["zoomEnabled"] == false) {
     return Image(image: NetworkImage(data["image"]));
   }

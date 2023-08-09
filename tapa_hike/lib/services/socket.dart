@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-const String domain = "127.0.0.1:8000";
+const String domain = "116.203.112.220:80"; // "127.0.0.1:8000";
 
 class SocketConnection {
   late final WebSocketChannel channel;

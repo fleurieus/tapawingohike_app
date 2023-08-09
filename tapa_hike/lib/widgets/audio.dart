@@ -12,7 +12,7 @@ class AudioPlayerWidget extends StatefulWidget {
 
 class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
   late AudioPlayer _audioPlayer;
-  AudioPlayerState _audioPlayerState = AudioPlayerState.STOPPED;
+  PlayerState _audioPlayerState = PlayerState.stopped;
   Duration _duration = Duration();
   Duration _position = Duration();
 
@@ -24,7 +24,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
 
   void _initAudioPlayer() {
     _audioPlayer = AudioPlayer();
-    _audioPlayer.onPlayerStateChanged.listen((AudioPlayerState state) {
+    _audioPlayer.onPlayerStateChanged.listen((PlayerState state) {
       if (mounted) {
         setState(() {
           _audioPlayerState = state;
@@ -38,7 +38,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
         });
       }
     });
-    _audioPlayer.onAudioPositionChanged.listen((Duration position) {
+    _audioPlayer.onPositionChanged.listen((Duration position) {
       if (mounted) {
         setState(() {
           _position = position;
@@ -63,14 +63,14 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
             flex: 1,
             child: IconButton(
               onPressed: () {
-                if (_audioPlayerState == AudioPlayerState.PLAYING) {
+                if (_audioPlayerState == PlayerState.playing) {
                   _audioPlayer.pause();
                 } else {
-                  _audioPlayer.play(widget.audioUrl);
+                  _audioPlayer.play(UrlSource(widget.audioUrl));
                 }
               },
               icon: Icon(
-                _audioPlayerState == AudioPlayerState.PLAYING
+                _audioPlayerState == PlayerState.playing
                     ? Icons.pause
                     : Icons.play_arrow,
                 color: Colors.white,
