@@ -3,6 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:tapa_hike/pages/home.dart';
+
 import 'package:tapa_hike/services/socket.dart';
 import 'package:tapa_hike/services/location.dart';
 import 'package:tapa_hike/services/cron_job.dart';
@@ -23,6 +27,12 @@ class _HikePageState extends State<HikePage> {
   List destinations = [];
   bool showConfirm = false;
   late LatLng lastLocation;
+
+  void removeAuthStr() async {
+    SharedPreferences localStore = await SharedPreferences.getInstance();
+    localStore.remove("authStr");
+  }
+
 
   void resetHikeData () => setState(() {
     hikeData = null;
@@ -101,8 +111,29 @@ class _HikePageState extends State<HikePage> {
 
     setupLocationThings();
 
+
     return Scaffold(
       backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text("TapawingoHike 2023"),
+        actions: <Widget>[
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Uitloggen',
+            onPressed: () {
+              removeAuthStr();
+               Navigator.push(context, MaterialPageRoute(builder: (context) => HomePage()));
+            },
+          ), //IconButton
+        ], //<Widget>[]
+        backgroundColor: Colors.green,
+        elevation: 50.0,
+        // leading: IconButton(
+        //   icon: const Icon(Icons.menu),
+        //   tooltip: 'Menu Icon',
+        //   onPressed: () {},
+        // ),
+      ),
       body: hikeTypeWidgets[hikeData!["type"]](hikeData!["data"], destinations),
       floatingActionButton: (showConfirm ? FloatingActionButton.extended(
         onPressed: () {
