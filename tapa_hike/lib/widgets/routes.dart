@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 
-import 'package:latlong2/latlong.dart';
 import 'package:photo_view/photo_view.dart';
 
-import 'package:flutter_map/flutter_map.dart';
-import 'package:flutter_map_location_marker/flutter_map_location_marker.dart';
-
 import 'package:tapa_hike/widgets/audio.dart';
+import 'package:tapa_hike/widgets/map.dart';
 
 Map hikeTypeWidgets = {
   "coordinate": coordinate,
@@ -15,27 +12,27 @@ Map hikeTypeWidgets = {
 };
 
 Widget widgetCoordinate (data, destinations) {
-  List markers = destinations.map((item) => item.marker).toList();
+  return MapWidgetFMap(destinations: destinations);
+  // List markers = destinations.map((item) => item.marker).toList();
 
-  return FlutterMap(
-    options: MapOptions(
-      center: LatLng(52.258779, 5.970222),
-      zoom: 9.2,
-    ),
-    children: [
-      TileLayer(
-        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-      ),
-      CurrentLocationLayer(
-        followOnLocationUpdate: FollowOnLocationUpdate.always
-      ),
-     ...markers,
-    ],
-  );
+  // return FlutterMap(
+  //   options: MapOptions(
+  //     center: LatLng(52.258779, 5.970222),
+  //     zoom: 9.2,
+  //   ),
+  //   children: [
+  //     TileLayer(
+  //       urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  //     ),
+  //     CurrentLocationLayer(
+  //       followOnLocationUpdate: FollowOnLocationUpdate.always
+  //     ),
+  //    ...markers,
+  //   ],
+  // );
 }
 
 Widget widgetImage (data) {
-  print(data["image"]);
   if (data["zoomEnabled"] == false) {
     return Image(image: NetworkImage(data["image"]));
   }
@@ -92,7 +89,7 @@ Widget audio (data, destinations) {
       child: widgetAudio(data),
     ),
   ];
-  if (data["fullscreen"] == false) {
+  if (data["fullscreen"] == false && data["image"] != null ) {
     widgets.add(
       Expanded(
         flex: 2,
@@ -105,7 +102,7 @@ Widget audio (data, destinations) {
         child: widgetCoordinate(data, destinations),
       )
     );
-  } else {
+  } else if(data["image"] != null) {
     widgets.add(
       Expanded(
         flex: 5,

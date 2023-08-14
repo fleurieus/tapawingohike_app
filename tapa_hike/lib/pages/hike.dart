@@ -45,7 +45,7 @@ class _HikePageState extends State<HikePage> {
     socketConnection.sendJson({"endpoint": "newLocation"});
     socketConnection.listenOnce(socketConnection.locationStream).then((event) {
       setState(() {
-        hikeData = event;
+        hikeData = event;        
         destinations = parseDestinations(hikeData!["data"]["coordinates"]);
       });
     });
@@ -104,13 +104,16 @@ class _HikePageState extends State<HikePage> {
     return Scaffold(
       backgroundColor: Colors.black,
       body: hikeTypeWidgets[hikeData!["type"]](hikeData!["data"], destinations),
-      floatingActionButton: showConfirm ? FloatingActionButton(
+      floatingActionButton: (showConfirm ? FloatingActionButton.extended(
         onPressed: () {
           socketConnection.sendJson(locationConfirmdData(reachedLocationId));
           resetHikeData();
         },
-        child: const Icon(Icons.check_outlined, size: 45),
-      ) : null,
+        label: const Text('Volgende'),
+        icon: const Icon(Icons.thumb_up),
+        backgroundColor: Colors.red,
+      ) : null),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 }

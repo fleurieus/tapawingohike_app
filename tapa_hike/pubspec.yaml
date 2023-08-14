@@ -1,5 +1,5 @@
 name: tapa_hike
-description: A new Flutter project.
+description: Tapawingo Hike App - Stichting Scouting Eerbeek
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -40,7 +40,7 @@ dependencies:
   flutter_map_location_marker: ^7.0.2
   permission_handler: ^10.4.3
   photo_view: ^0.14.0
-  audioplayers: ^5.0.0
+  audioplayers: ^5.1.0
   geolocator: ^9.0.2
   cron: ^0.5.1
 
@@ -65,6 +65,7 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
 
   # To add assets to your application, add an assets section, like this:
   # assets:

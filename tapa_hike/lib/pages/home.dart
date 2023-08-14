@@ -19,7 +19,7 @@ class HomePage extends StatelessWidget {
             TextFormField(
               decoration: const InputDecoration(
                 border: UnderlineInputBorder(),
-                labelText: 'TEAM ID',
+                labelText: 'Login met jouw teamcode',
               ),
               onChanged: (value) {
                 authStr = value; // Update the authStr when the text changes
@@ -43,7 +43,7 @@ class HomePage extends StatelessWidget {
                 }
                 Navigator.pushReplacementNamed(context, "/hike");
               },
-              child: Text('Submit'),
+              child: Text('Inloggen'),
             ),
           ],
         ),
