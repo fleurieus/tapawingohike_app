@@ -17,6 +17,7 @@ class MapWidgetFMap extends StatefulWidget {
 class _MapWidgetFMapState extends State<MapWidgetFMap> {
   late FollowOnLocationUpdate _followOnLocationUpdate;
   late StreamController<double?> _followCurrentLocationStreamController;
+  final mapController = MapController();
 
   @override
   void initState() {
@@ -35,11 +36,16 @@ class _MapWidgetFMapState extends State<MapWidgetFMap> {
   Widget build(BuildContext context) {
     List markers = widget.destinations.map((item) => item.marker).toList();
     return FlutterMap(
+      mapController: mapController,
       options: MapOptions(
         center: const LatLng(52.258779, 5.970222),
         zoom: 14,
         minZoom: 0,
         maxZoom: 19,
+        onMapReady: () {            
+            mapController.mapEventStream.listen((evt) {});
+            // And any other `MapController` dependent non-movement methods
+        },
         // Stop following the location marker on the map if user interacted with the map.
         onPositionChanged: (MapPosition position, bool hasGesture) {
           if (hasGesture && _followOnLocationUpdate != FollowOnLocationUpdate.never) {
@@ -84,6 +90,21 @@ class _MapWidgetFMapState extends State<MapWidgetFMap> {
             ),
           ),
         ),
+        Positioned(
+          right: 20,
+          bottom: 85,
+          child: FloatingActionButton(
+            onPressed: () {
+              //rotate to north              
+              double rotation = 0.0;
+              mapController.rotate(rotation);
+            },
+            child: const Icon(
+              Icons.explore,
+              color: Colors.white,
+            ),
+          ),
+        )
       ],
       
     );

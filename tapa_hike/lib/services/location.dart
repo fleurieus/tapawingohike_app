@@ -61,13 +61,17 @@ LatLng positionToLatLng (position) => LatLng(position.latitude, position.longitu
 
 Destination? checkDestionsReached(List destinations, currentLocation) {
   for (final Destination destination in destinations) {
-    if (destination.inRadius(currentLocation)) {
+    //if (destination.inRadius(currentLocation)) {
       return destination;
-    }
+    //}
   }
   return null;
 }
 
-Stream currentLocationStream = Geolocator.getPositionStream().map(
+const locationSettings = LocationSettings(
+  accuracy: LocationAccuracy.high
+);
+
+Stream currentLocationStream = Geolocator.getPositionStream(locationSettings: locationSettings).map(
   (Position position) => positionToLatLng(position)
 ).asBroadcastStream();

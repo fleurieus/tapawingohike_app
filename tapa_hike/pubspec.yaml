@@ -44,6 +44,7 @@ dependencies:
   geolocator: ^9.0.2
   cron: ^0.5.1
   shared_preferences: ^2.2.0
+  just_audio: ^0.9.34
 
 dev_dependencies:
   flutter_test:

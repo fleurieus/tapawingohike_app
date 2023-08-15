@@ -52,13 +52,36 @@ class _HikePageState extends State<HikePage> {
   }
 
   void receiveHikeData () async {
-    socketConnection.sendJson({"endpoint": "newLocation"});
+    Completer<void> socketCompleter = Completer<void>();
+
     socketConnection.listenOnce(socketConnection.locationStream).then((event) {
+
       setState(() {
-        hikeData = event;        
+        hikeData = event;
         destinations = parseDestinations(hikeData!["data"]["coordinates"]);
       });
+
+      // Complete the Completer to signal that the socket action is done
+      socketCompleter.complete();
     });
+
+    // Send the JSON message
+    socketConnection.sendJson({"endpoint": "newLocation"});
+
+    // Wait for the socket action to complete
+    await socketCompleter.future;
+
+
+
+
+    // socketConnection.sendJson({"endpoint": "newLocation"});
+    // socketConnection.listenOnce(socketConnection.locationStream).then((event) {
+    //   print(event);
+    //   setState(() {
+    //     hikeData = event;        
+    //     destinations = parseDestinations(hikeData!["data"]["coordinates"]);
+    //   });
+    // });
   }
 
   Future destinationReached (destinations) {
@@ -122,7 +145,11 @@ class _HikePageState extends State<HikePage> {
             tooltip: 'Uitloggen',
             onPressed: () {
               removeAuthStr();
-               Navigator.push(context, MaterialPageRoute(builder: (context) => HomePage()));
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => HomePage()),
+              );
+              
             },
           ), //IconButton
         ], //<Widget>[]

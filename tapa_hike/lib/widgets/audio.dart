@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:audioplayers/audioplayers.dart';
+import 'package:just_audio/just_audio.dart';
 
 class AudioPlayerWidget extends StatefulWidget {
   final String audioUrl;
@@ -12,9 +12,7 @@ class AudioPlayerWidget extends StatefulWidget {
 
 class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
   late AudioPlayer _audioPlayer;
-  PlayerState _audioPlayerState = PlayerState.stopped;
-  Duration _duration = Duration();
-  Duration _position = Duration();
+  ConcatenatingAudioSource _audioSource = ConcatenatingAudioSource(children: []);
 
   @override
   void initState() {
@@ -22,26 +20,19 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
     _initAudioPlayer();
   }
 
-  void _initAudioPlayer() {
+  void _initAudioPlayer() async {
     _audioPlayer = AudioPlayer();
-    _audioPlayer.onPlayerStateChanged.listen((PlayerState state) {
+
+    // Load the audio source
+    _audioSource.add(AudioSource.uri(Uri.parse(widget.audioUrl)));
+
+    await _audioPlayer.setAudioSource(_audioSource);
+
+    _audioPlayer.playbackEventStream.listen((event) {
+      // Update the player state based on the event
       if (mounted) {
         setState(() {
-          _audioPlayerState = state;
-        });
-      }
-    });
-    _audioPlayer.onDurationChanged.listen((Duration duration) {
-      if (mounted) {
-        setState(() {
-          _duration = duration;
-        });
-      }
-    });
-    _audioPlayer.onPositionChanged.listen((Duration position) {
-      if (mounted) {
-        setState(() {
-          _position = position;
+          // Handle playback events here
         });
       }
     });
@@ -49,51 +40,62 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
 
   @override
   void dispose() {
-    _audioPlayer.release();
     _audioPlayer.dispose();
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Row(
-        children: [
-          Expanded(
-            flex: 1,
-            child: IconButton(
-              onPressed: () {
-                if (_audioPlayerState == PlayerState.playing) {
-                  _audioPlayer.pause();
-                } else {
-                  _audioPlayer.play(UrlSource(widget.audioUrl));
-                }
-              },
-              icon: Icon(
-                _audioPlayerState == PlayerState.playing
-                    ? Icons.pause
-                    : Icons.play_arrow,
-                color: Colors.white,
-              ),
+@override
+Widget build(BuildContext context) {
+  return SafeArea(
+    child: Row(
+      children: [
+        Expanded(
+          flex: 1,
+          child: IconButton(
+            onPressed: () {
+              if (_audioPlayer.playing) {
+                _audioPlayer.pause();
+              } else {
+                _audioPlayer.play();
+              }
+            },
+            icon: Icon(
+              _audioPlayer.playing
+                  ? Icons.pause
+                  : Icons.play_arrow,
+              color: Colors.white,
             ),
           ),
-          Expanded(
-            flex: 4,
-            child: Slider(
-              value: _position.inSeconds.toDouble(),
-              min: 0.0,
-              max: _duration.inSeconds.toDouble(),
-              onChanged: (double value) {
-                if (mounted) {
-                  setState(() {
-                    _audioPlayer.seek(Duration(seconds: value.toInt()));
-                  });
-                }
-              },
-            ),
-          )
-        ],
-      ),
-    );
-  }
+        ),
+        Expanded(
+          flex: 4,
+          child: StreamBuilder<Duration?>(
+            stream: _audioPlayer.positionStream, // Use the positionStream
+            builder: (context, snapshot) {
+              final position = snapshot.data ?? Duration.zero;
+
+              return StreamBuilder<Duration?>(
+                stream: _audioPlayer.durationStream, // Use the durationStream
+                builder: (context, snapshot) {
+                  final duration = snapshot.data ?? Duration.zero;
+
+                  return Slider(
+                    value: position.inSeconds.toDouble(),
+                    min: 0.0,
+                    max: duration.inSeconds.toDouble(),
+                    onChanged: (double value) {
+                      _audioPlayer.seek(Duration(seconds: value.toInt()));
+                    },
+                  );
+                },
+              );
+            },
+          ),
+
+        )
+      ],
+    ),
+  );
+}
+
 }
