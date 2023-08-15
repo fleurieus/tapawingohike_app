@@ -61,9 +61,9 @@ LatLng positionToLatLng (position) => LatLng(position.latitude, position.longitu
 
 Destination? checkDestionsReached(List destinations, currentLocation) {
   for (final Destination destination in destinations) {
-    //if (destination.inRadius(currentLocation)) {
+    if (destination.inRadius(currentLocation)) {
       return destination;
-    //}
+    }
   }
   return null;
 }
