@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:wakelock/wakelock.dart';
 
@@ -25,7 +26,7 @@ class HikePage extends StatefulWidget {
   State<HikePage> createState() => _HikePageState();
 }
 
-class _HikePageState extends State<HikePage> {
+class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
   Map? hikeData;
   int? reachedLocationId;
   List destinations = [];
@@ -33,7 +34,27 @@ class _HikePageState extends State<HikePage> {
   bool keepScreenOn = false;
   late LatLng lastLocation;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
 
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Check and handle the reconnection logic here
+      if (!socketConnection.isConnected()) {
+        SocketConnection.reconnect();
+      }
+    }
+  }
   void sendLastLocationData() {
     socketConnection.sendJson({
       "endpoint": "updateLocation",
