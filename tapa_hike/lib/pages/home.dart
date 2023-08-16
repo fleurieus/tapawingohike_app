@@ -66,6 +66,12 @@ class _HomePageState extends State<HomePage> {
                 border: UnderlineInputBorder(),
                 labelText: 'Login met jouw teamcode',
               ),
+              onFieldSubmitted: (value) {
+                String authStr = value.trim();
+                if (authStr.isNotEmpty) {
+                  loginAndPermissions(authStr);
+                }
+              },
             ),
             SizedBox(height: 20),
             ElevatedButton(

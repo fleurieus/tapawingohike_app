@@ -1,14 +1,14 @@
-import 'package:cron/cron.dart';
+// import 'package:cron/cron.dart';
 
-Cron _cron = Cron();
+// Cron _cron = Cron();
 
-void startCronjob(func, int duration) {
-  _cron = Cron();
-  _cron.schedule(Schedule.parse('*/${duration.toString()} * * * *'), () {
-    func();
-  });
-}
+// void startCronjob(func, int duration) {
+//   _cron = Cron();
+//   _cron.schedule(Schedule.parse('*/${duration.toString()} * * * *'), () {
+//     func();
+//   });
+// }
 
-void stopCronjob() {
-  _cron.close();
-}
+// void stopCronjob() {
+//   _cron.close();
+// }

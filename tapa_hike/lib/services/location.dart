@@ -69,7 +69,7 @@ Destination? checkDestionsReached(List destinations, currentLocation) {
 }
 
 const locationSettings = LocationSettings(
-  accuracy: LocationAccuracy.high
+  accuracy: LocationAccuracy.bestForNavigation
 );
 
 Stream currentLocationStream = Geolocator.getPositionStream(locationSettings: locationSettings).map(

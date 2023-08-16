@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:wakelock/wakelock.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -9,7 +10,10 @@ import 'package:tapa_hike/pages/home.dart';
 
 import 'package:tapa_hike/services/socket.dart';
 import 'package:tapa_hike/services/location.dart';
-import 'package:tapa_hike/services/cron_job.dart';
+
+//import 'package:tapa_hike/services/cron_job.dart';
+
+
 
 import 'package:tapa_hike/widgets/loading.dart';
 import 'package:tapa_hike/widgets/routes.dart';
@@ -26,7 +30,20 @@ class _HikePageState extends State<HikePage> {
   int? reachedLocationId;
   List destinations = [];
   bool showConfirm = false;
+  bool keepScreenOn = false;
   late LatLng lastLocation;
+
+
+  void sendLastLocationData() {
+    socketConnection.sendJson({
+      "endpoint": "updateLocation",
+      "data": {
+        "lat": lastLocation.latitude,
+        "lng": lastLocation.longitude
+      }
+    });
+  }
+
 
   void removeAuthStr() async {
     SharedPreferences localStore = await SharedPreferences.getInstance();
@@ -41,47 +58,14 @@ class _HikePageState extends State<HikePage> {
     showConfirm = false;
   });
 
-  void sendLastLocationData () {
-    socketConnection.sendJson({
-      "endpoint": "updateLocation",
-      "data": {
-        "lat": lastLocation.latitude,
-        "lng": lastLocation.longitude
-      }
-    });
-  }
-
-  void receiveHikeData () async {
-    Completer<void> socketCompleter = Completer<void>();
-
-    socketConnection.listenOnce(socketConnection.locationStream).then((event) {
-
+  void receiveHikeData () async {    
+    socketConnection.sendJson({"endpoint": "newLocation"});
+    socketConnection.listenOnce(socketConnection.locationStream).then((event) { 
       setState(() {
-        hikeData = event;
+        hikeData = event;        
         destinations = parseDestinations(hikeData!["data"]["coordinates"]);
       });
-
-      // Complete the Completer to signal that the socket action is done
-      socketCompleter.complete();
     });
-
-    // Send the JSON message
-    socketConnection.sendJson({"endpoint": "newLocation"});
-
-    // Wait for the socket action to complete
-    await socketCompleter.future;
-
-
-
-
-    // socketConnection.sendJson({"endpoint": "newLocation"});
-    // socketConnection.listenOnce(socketConnection.locationStream).then((event) {
-    //   print(event);
-    //   setState(() {
-    //     hikeData = event;        
-    //     destinations = parseDestinations(hikeData!["data"]["coordinates"]);
-    //   });
-    // });
   }
 
   Future destinationReached (destinations) {
@@ -106,10 +90,14 @@ class _HikePageState extends State<HikePage> {
     if (showConfirm || destinations == []) return;
 
     // before destination reached but hiking
-    startCronjob(sendLastLocationData, 1);
+    //startCronjob(sendLastLocationData, 1);
+    //_startBackgroundTask();
+
     Destination destination = await destinationReached(destinations);
+    
     // after destination reached
-    stopCronjob();
+    //stopCronjob();
+    //_cancelBackgroundTask();
 
 
     if (destination.confirmByUser) {
@@ -135,16 +123,68 @@ class _HikePageState extends State<HikePage> {
     setupLocationThings();
 
 
+    //Confirm button
+    bool isConfirming = false; // Track whether confirmation is in progress
+    FloatingActionButton confirmButton = FloatingActionButton.extended(
+      onPressed: !isConfirming ? () async {
+        setState(() {
+          isConfirming = true;
+        });
+
+        socketConnection.sendJson(locationConfirmdData(reachedLocationId));
+        //hier willen we eigenlijk een bevestiging terug en dan pas de state wijzigen
+        setState(() {
+          isConfirming = false;
+          resetHikeData();
+        });
+      
+        // final response = await socketConnection.listenOnce(socketConnection.locationStream);
+        // if (response["status"] == "confirmationReceived") {
+        //   setState(() {
+        //     isConfirming = false;
+        //     resetHikeData();
+        //   });
+        // }
+      } : null,
+      label: const Text('Volgende'),
+      icon: const Icon(Icons.thumb_up),
+      backgroundColor: isConfirming ? Colors.grey : Colors.red,
+    );
+
+
+
+
+
+
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
         title: const Text("TapawingoHike 2023"),
-        actions: <Widget>[
+        actions: <Widget>[          
+          IconButton(
+            onPressed: () {
+              setState(() {
+                keepScreenOn = !keepScreenOn;
+              });
+
+              // Toggle screen wake lock state
+              if (keepScreenOn) {
+                Wakelock.enable();
+              } else {
+                Wakelock.disable();
+              }
+            },
+            icon: Icon(
+              keepScreenOn ? Icons.screen_lock_rotation : Icons.screen_lock_portrait,
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Uitloggen',
             onPressed: () {
               removeAuthStr();
+              SocketConnection.closeAndReconnect();
+
               Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(builder: (context) => HomePage()),
@@ -162,16 +202,18 @@ class _HikePageState extends State<HikePage> {
         // ),
       ),
       body: hikeTypeWidgets[hikeData!["type"]](hikeData!["data"], destinations),
-      floatingActionButton: (showConfirm ? FloatingActionButton.extended(
-        onPressed: () {
-          socketConnection.sendJson(locationConfirmdData(reachedLocationId));
-          resetHikeData();
-        },
-        label: const Text('Volgende'),
-        icon: const Icon(Icons.thumb_up),
-        backgroundColor: Colors.red,
-      ) : null),
+      floatingActionButton: (showConfirm ? confirmButton : null),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 }
+
+// FloatingActionButton.extended(
+//         onPressed: () {
+//           socketConnection.sendJson(locationConfirmdData(reachedLocationId));
+//           resetHikeData();
+//         },
+//         label: const Text('Volgende'),
+//         icon: const Icon(Icons.thumb_up),
+//         backgroundColor: Colors.red,
+//       )

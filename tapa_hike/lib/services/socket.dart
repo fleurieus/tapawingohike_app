@@ -8,16 +8,20 @@ const String domain = "116.203.112.220:80"; // "127.0.0.1:8000";
 class SocketConnection {
   late final WebSocketChannel channel;
   late final Stream mainStream;
+  late final Map channelMapping;
 
   final StreamController locationStreamController = StreamController.broadcast();
   get locationStream => locationStreamController.stream;
+
+    
+    
 
 
   SocketConnection () {
     channel = WebSocketChannel.connect(Uri.parse('ws://$domain/ws/app/'));
     mainStream = channel.stream.map((event) => json.decode(event));
     
-    final Map channelMapping = {
+    channelMapping = {
       "route": locationStreamController,
     };
     
@@ -50,6 +54,12 @@ class SocketConnection {
       },
     });
   }
+
+  static void closeAndReconnect() {
+    socketConnection.channel.sink.close();
+    socketConnection = SocketConnection(); // Re-create the instance
+  }
+
 }
 
 SocketConnection socketConnection = SocketConnection();
