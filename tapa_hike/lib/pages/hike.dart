@@ -12,7 +12,7 @@ import 'package:tapa_hike/pages/home.dart';
 import 'package:tapa_hike/services/socket.dart';
 import 'package:tapa_hike/services/location.dart';
 
-//import 'package:tapa_hike/services/cron_job.dart';
+import 'package:workmanager/workmanager.dart';
 
 
 
@@ -51,10 +51,26 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       // Check and handle the reconnection logic here
       if (!socketConnection.isConnected()) {
-        SocketConnection.reconnect();
+        socketConnection.reconnect();
       }
     }
   }
+
+  void _startBackgroundTask(Function taskFunction) {
+    
+    Workmanager().registerPeriodicTask(
+      'background_task', // Task name
+      'simpleTask',      // Task identifier
+      frequency: Duration(minutes: 15), // Execute every 15 minutes
+      inputData: <String, dynamic>{'taskFunction': taskFunction.toString()},
+    );
+  }
+
+  void _cancelBackgroundTask() {
+    Workmanager().cancelByTag('background_task');
+  }
+
+
   void sendLastLocationData() {
     socketConnection.sendJson({
       "endpoint": "updateLocation",
@@ -112,13 +128,13 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
 
     // before destination reached but hiking
     //startCronjob(sendLastLocationData, 1);
-    //_startBackgroundTask();
+    _startBackgroundTask(sendLastLocationData);
 
     Destination destination = await destinationReached(destinations);
     
     // after destination reached
     //stopCronjob();
-    //_cancelBackgroundTask();
+    _cancelBackgroundTask();
 
 
     if (destination.confirmByUser) {

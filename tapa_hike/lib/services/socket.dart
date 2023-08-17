@@ -6,19 +6,22 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 const String domain = "116.203.112.220:80"; // "127.0.0.1:8000";
 
 class SocketConnection {
-  late final WebSocketChannel channel;
-  late final Stream mainStream;
-  late final Map channelMapping;
-  final String authStr = '';
+  late WebSocketChannel channel;
+  late Stream mainStream;
+  late Map channelMapping;
+  String authStr = '';
 
   final StreamController locationStreamController = StreamController.broadcast();
-  get locationStream => locationStreamController.stream;
+  Stream get locationStream => locationStreamController.stream;
 
-    
-  static void reconnect() {
+  void _initConnection() {
     channel = WebSocketChannel.connect(Uri.parse('ws://$domain/ws/app/'));
 
     mainStream = channel.stream.map((event) => json.decode(event));
+
+    channelMapping = {
+      "route": locationStreamController,
+    };
 
     mainStream.listen((event) {
       channelMapping[event["type"]].add(event["data"]);
@@ -26,31 +29,25 @@ class SocketConnection {
 
     // Re-authenticate if needed
     authenticate(authStr);
-  } 
-  
-     
+  }
+
+  void reconnect() {
+    channel.sink.close();
+    _initConnection();
+  }
 
   bool isConnected() {
     return channel.sink.done == null;
   }
 
-  SocketConnection () {
-    channel = WebSocketChannel.connect(Uri.parse('ws://$domain/ws/app/'));
-    mainStream = channel.stream.map((event) => json.decode(event));
-    
-    channelMapping = {
-      "route": locationStreamController,
-    };
-    
-    mainStream.listen((event) {
-      channelMapping[event["type"]].add(event["data"]);
-    });
+  SocketConnection() {
+    _initConnection();
 
     // Detect when the WebSocket connection is closed
     channel.sink.done.then((_) {
       // Attempt to reconnect after a delay
-      Future.delayed(const Duration(seconds: 5), () {
-        _reconnect();
+      Future.delayed(const Duration(seconds: 1), () {
+        reconnect();
       });
     });
   }
@@ -71,22 +68,22 @@ class SocketConnection {
     return completer.future;
   }
 
-  void authenticate(authStr) {
-    authStr = authStr;
-
-    sendJson({
-      "endpoint": "authenticate",
-      "data": {
-        "authStr": authStr.toString(),
-      },
-    });
+  void authenticate(String authString) {
+    authStr = authString;
+    if( authStr.isNotEmpty ) {          
+      sendJson({
+        "endpoint": "authenticate",
+        "data": {
+          "authStr": authStr,
+        },
+      });
+    }
   }
 
   static void closeAndReconnect() {
     socketConnection.channel.sink.close();
-    socketConnection = SocketConnection(); // Re-create the instance
+    socketConnection = SocketConnection();
   }
-
 }
 
 SocketConnection socketConnection = SocketConnection();

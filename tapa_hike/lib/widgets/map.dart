@@ -65,9 +65,9 @@ class _MapWidgetFMapState extends State<MapWidgetFMap> {
           maxZoom: 19,
         ),
         CurrentLocationLayer(
-          followCurrentLocationStream:
-              _followCurrentLocationStreamController.stream,
+          followCurrentLocationStream: _followCurrentLocationStreamController.stream,
           followOnLocationUpdate: _followOnLocationUpdate,
+          turnOnHeadingUpdate: TurnOnHeadingUpdate.never,
         ),
         ...markers,
       ],
