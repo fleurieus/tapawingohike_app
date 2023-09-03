@@ -18,24 +18,30 @@ List parseDestinations (List coordinates) {
     c["radius"],
     c["type"],
     c["confirmByUser"],
+    c["hideForUser"]
   )).toList();
 }
 
 class Destination {
   final int id;
   final int radius;
-  final String type;
+  late String type;
+  double size = 20;
   final bool confirmByUser;
   late final LatLng location;
+  final bool hideForUser;
 
   final Map colorMapping = {
     "mandatory": Colors.red,
     "choice": Colors.orange,
     "bonus": Colors.green,
+    "hidden": Colors.black
   };
 
-  Destination (this.id, latitude, longitude, this.radius, this.type, this.confirmByUser) {
+  Destination (this.id, latitude, longitude, this.radius, this.type, this.confirmByUser, this.hideForUser) {
     location = LatLng(latitude, longitude);
+    type = hideForUser ? "hidden" : type;
+    size = hideForUser ? 0 : 20;
   }
 
   Widget get marker => LocationMarkerLayer(
@@ -47,7 +53,8 @@ class Destination {
     style: LocationMarkerStyle(
       marker: DefaultLocationMarker(
         color: colorMapping[type]
-      )
+      ),
+      markerSize: Size.square(size)
     )
   );
 

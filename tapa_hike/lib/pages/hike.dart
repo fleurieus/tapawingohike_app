@@ -56,13 +56,15 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
     }
   }
 
-  void _startBackgroundTask(Function taskFunction) {
-    
+  void _startBackgroundTask(String taskType) {
     Workmanager().registerPeriodicTask(
-      'background_task', // Task name
-      'simpleTask',      // Task identifier
-      frequency: Duration(minutes: 15), // Execute every 15 minutes
-      inputData: <String, dynamic>{'taskFunction': taskFunction.toString()},
+      'background_task',
+      'simpleTask',
+      frequency: const Duration(minutes: 15),
+      inputData: <String, dynamic>{'taskType': taskType},
+      constraints: Constraints(
+        networkType: NetworkType.connected,
+      ),
     );
   }
 
@@ -71,15 +73,17 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
   }
 
 
-  void sendLastLocationData() {
-    socketConnection.sendJson({
-      "endpoint": "updateLocation",
-      "data": {
-        "lat": lastLocation.latitude,
-        "lng": lastLocation.longitude
-      }
-    });
-  }
+
+  // void sendLastLocationData() {
+  //   print('Sending last location');
+  //   socketConnection.sendJson({
+  //     "endpoint": "updateLocation",
+  //     "data": {
+  //       "lat": lastLocation.latitude,
+  //       "lng": lastLocation.longitude
+  //     }
+  //   });
+  // }
 
 
   void removeAuthStr() async {
@@ -128,13 +132,13 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
 
     // before destination reached but hiking
     //startCronjob(sendLastLocationData, 1);
-    _startBackgroundTask(sendLastLocationData);
+    //_startBackgroundTask('sendLastLocationData');
 
     Destination destination = await destinationReached(destinations);
     
     // after destination reached
     //stopCronjob();
-    _cancelBackgroundTask();
+    //_cancelBackgroundTask();
 
 
     if (destination.confirmByUser) {
