@@ -17,8 +17,6 @@ void sendLastLocationData() {
 print( 'Send last location called');
   currentLocationStream.listen((location) {
     lastLocation = location;
-
-    print( 'Sending last location');
     // Implement your logic for sending last location data here
     socketConnection.sendJson({
       "endpoint": "updateLocation",
@@ -31,6 +29,7 @@ print( 'Send last location called');
 }
 
 void callbackDispatcher() {
+  
   Workmanager().executeTask((task, inputData) {
     if (task == 'locationUpdate') {
       sendLastLocationData();
