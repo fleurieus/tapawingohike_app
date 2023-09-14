@@ -8,7 +8,7 @@ import 'package:latlong2/latlong.dart';
 class MapWidgetFMap extends StatefulWidget {
   final List destinations;
 
-  MapWidgetFMap({required this.destinations});
+  const MapWidgetFMap({super.key, required this.destinations});
 
   @override
   _MapWidgetFMapState createState() => _MapWidgetFMapState();
@@ -42,9 +42,9 @@ class _MapWidgetFMapState extends State<MapWidgetFMap> {
         zoom: 14,
         minZoom: 0,
         maxZoom: 19,
-        onMapReady: () {            
-            mapController.mapEventStream.listen((evt) {});
-            // And any other `MapController` dependent non-movement methods
+        onMapReady: () {
+          mapController.mapEventStream.listen((evt) {});
+          // And any other `MapController` dependent non-movement methods
         },
         // Stop following the location marker on the map if user interacted with the map.
         onPositionChanged: (MapPosition position, bool hasGesture) {
@@ -60,8 +60,7 @@ class _MapWidgetFMapState extends State<MapWidgetFMap> {
         TileLayer(
           urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
           subdomains: const ['a', 'b', 'c'],
-          userAgentPackageName:
-              'net.tlserver6y.flutter_map_location_marker.',
+          userAgentPackageName: 'net.tlserver6y.flutter_map_location_marker.',
           maxZoom: 19,
         ),
         CurrentLocationLayer(
@@ -76,6 +75,7 @@ class _MapWidgetFMapState extends State<MapWidgetFMap> {
           right: 20,
           bottom: 20,
           child: FloatingActionButton(
+            heroTag: 'followMebtn',
             onPressed: () {
               // Follow the location marker on the map when location updated until user interact with the map.
               setState(
@@ -94,8 +94,9 @@ class _MapWidgetFMapState extends State<MapWidgetFMap> {
           right: 20,
           bottom: 85,
           child: FloatingActionButton(
+            heroTag: 'northBtn',
             onPressed: () {
-              //rotate to north              
+              //rotate to north
               double rotation = 0.0;
               mapController.rotate(rotation);
             },
@@ -106,7 +107,6 @@ class _MapWidgetFMapState extends State<MapWidgetFMap> {
           ),
         )
       ],
-      
     );
   }
 }

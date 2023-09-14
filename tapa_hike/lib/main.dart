@@ -8,13 +8,10 @@ import 'package:tapa_hike/services/location.dart';
 import 'package:tapa_hike/pages/home.dart';
 import 'package:tapa_hike/pages/hike.dart';
 
-
-
-
 void sendLastLocationData() {
   // Assuming you have access to the necessary data (lastLocation) here
   late LatLng lastLocation;
-print( 'Send last location called');
+
   currentLocationStream.listen((location) {
     lastLocation = location;
     // Implement your logic for sending last location data here
@@ -25,11 +22,10 @@ print( 'Send last location called');
         "lng": lastLocation.longitude,
       },
     });
-  });    
+  });
 }
 
 void callbackDispatcher() {
-  
   Workmanager().executeTask((task, inputData) {
     if (task == 'locationUpdate') {
       sendLastLocationData();
@@ -38,7 +34,7 @@ void callbackDispatcher() {
     return Future.value(true);
   });
 
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 void main() {
@@ -48,18 +44,20 @@ void main() {
     isInDebugMode: true,
   );
 
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       theme: hikeTheme,
       initialRoute: "/home",
       routes: {
-        '/home': (context) => HomePage(),
-        '/hike': (context) => HikePage(),
+        '/home': (context) => const HomePage(),
+        '/hike': (context) => const HikePage(),
       },
     );
   }
