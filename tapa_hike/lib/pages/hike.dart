@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:wakelock/wakelock.dart';
 
@@ -13,8 +12,6 @@ import 'package:tapa_hike/services/socket.dart';
 import 'package:tapa_hike/services/location.dart';
 
 import 'package:workmanager/workmanager.dart';
-
-
 
 import 'package:tapa_hike/widgets/loading.dart';
 import 'package:tapa_hike/widgets/routes.dart';
@@ -34,6 +31,7 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
   bool keepScreenOn = false;
   late LatLng lastLocation;
 
+
   @override
   void initState() {
     super.initState();
@@ -49,23 +47,29 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // Check and handle the reconnection logic here
-      if (!socketConnection.isConnected()) {
-        socketConnection.reconnect();
-      }
+      //reconnect      
+      socketConnection.reconnect();      
     }
   }
 
-  void _startBackgroundTask(String taskType) {
+  void _startBackgroundTask() {
+    print('_startBackgroundTask');
     Workmanager().registerPeriodicTask(
       'background_task',
-      'simpleTask',
+      'locationUpdate',
       frequency: const Duration(minutes: 15),
-      inputData: <String, dynamic>{'taskType': taskType},
       constraints: Constraints(
         networkType: NetworkType.connected,
       ),
     );
+
+
+    
+    Workmanager().registerOneOffTask(
+        'simpleDelayedTask',
+        'locationUpdate',
+        initialDelay: Duration(seconds: 10),
+      );    
   }
 
   void _cancelBackgroundTask() {
@@ -109,13 +113,13 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
     });
   }
 
+
   Future destinationReached (destinations) {
     final completer = Completer();
     late StreamSubscription subscription;
 
     subscription = currentLocationStream.listen((location) {
       lastLocation = location;
-
       Destination? destination = checkDestionsReached(destinations, location);
       if (destination != null) {
         subscription.cancel();
@@ -132,13 +136,13 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
 
     // before destination reached but hiking
     //startCronjob(sendLastLocationData, 1);
-    //_startBackgroundTask('sendLastLocationData');
+    _startBackgroundTask();
 
     Destination destination = await destinationReached(destinations);
     
     // after destination reached
     //stopCronjob();
-    //_cancelBackgroundTask();
+    _cancelBackgroundTask();
 
 
     if (destination.confirmByUser) {
@@ -158,7 +162,7 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
     // if not hike data: recieve
     if (hikeData == null) {
       receiveHikeData();
-      return LoadingWidget();
+      return loadingWidget();
     }
 
     setupLocationThings();
@@ -179,13 +183,6 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
           resetHikeData();
         });
       
-        // final response = await socketConnection.listenOnce(socketConnection.locationStream);
-        // if (response["status"] == "confirmationReceived") {
-        //   setState(() {
-        //     isConfirming = false;
-        //     resetHikeData();
-        //   });
-        // }
       } : null,
       label: const Text('Volgende'),
       icon: const Icon(Icons.thumb_up),

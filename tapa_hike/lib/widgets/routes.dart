@@ -13,23 +13,6 @@ Map hikeTypeWidgets = {
 
 Widget widgetCoordinate (data, destinations) {
   return MapWidgetFMap(destinations: destinations);
-  // List markers = destinations.map((item) => item.marker).toList();
-
-  // return FlutterMap(
-  //   options: MapOptions(
-  //     center: LatLng(52.258779, 5.970222),
-  //     zoom: 9.2,
-  //   ),
-  //   children: [
-  //     TileLayer(
-  //       urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-  //     ),
-  //     CurrentLocationLayer(
-  //       followOnLocationUpdate: FollowOnLocationUpdate.always
-  //     ),
-  //    ...markers,
-  //   ],
-  // );
 }
 
 Widget widgetImage (data) {
@@ -37,15 +20,13 @@ Widget widgetImage (data) {
     return Image(image: NetworkImage(data["image"]));
   }
   
-  return Container(
-    child: ClipRect(
+  return ClipRect(
       child: PhotoView(
         imageProvider: NetworkImage(data["image"]),
         minScale: PhotoViewComputedScale.contained,
         initialScale: PhotoViewComputedScale.contained,
       ),
-    ),
-  );
+    );
 }
 
 Widget widgetAudio (data) {

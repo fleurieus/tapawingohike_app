@@ -36,9 +36,6 @@ class SocketConnection {
     _initConnection();
   }
 
-  bool isConnected() {
-    return channel.sink.done == null;
-  }
 
   SocketConnection() {
     _initConnection();

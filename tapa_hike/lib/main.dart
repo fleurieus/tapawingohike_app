@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:tapa_hike/theme.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:tapa_hike/services/socket.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:tapa_hike/services/location.dart';
 
 import 'package:tapa_hike/pages/home.dart';
@@ -12,29 +14,39 @@ import 'package:tapa_hike/pages/hike.dart';
 
 
 void sendLastLocationData() {
-  // Assuming you have access to the necessary data (lastLocation) here
-  late LatLng lastLocation;
-print( 'Send last location called');
-  currentLocationStream.listen((location) {
-    lastLocation = location;
-    // Implement your logic for sending last location data here
+  Stream bgLocationStream = Geolocator.getPositionStream(locationSettings: locationSettings).map(
+    (Position position) => positionToLatLng(position)
+  ).asBroadcastStream();
+
+  late StreamSubscription subscription;
+
+  subscription = bgLocationStream.listen((location) {
+    print({
+      "endpoint": "updateLocation",
+      "data": {
+        "lat": location.latitude,
+        "lng": location.longitude
+      }
+    });
     socketConnection.sendJson({
       "endpoint": "updateLocation",
       "data": {
-        "lat": lastLocation.latitude,
-        "lng": lastLocation.longitude,
-      },
-    });
-  });    
+        "lat": location.latitude,
+        "lng": location.longitude
+      }
+    });    
+    subscription.cancel();
+  });  
+  
 }
 
 void callbackDispatcher() {
-  
-  Workmanager().executeTask((task, inputData) {
+  print('callback dispatching');
+  Workmanager().executeTask((task, inputData) async {
+    
     if (task == 'locationUpdate') {
       sendLastLocationData();
     }
-
     return Future.value(true);
   });
 
@@ -48,10 +60,13 @@ void main() {
     isInDebugMode: true,
   );
 
+  
+
   runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {
+  MyApp({super.key});
   @override
   Widget build(BuildContext context) {
     return MaterialApp(

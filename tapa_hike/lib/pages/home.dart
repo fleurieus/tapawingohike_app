@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:tapa_hike/services/socket.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -51,7 +50,7 @@ class _HomePageState extends State<HomePage> {
         builder: (BuildContext dialogContext) {
           return AlertDialog(
             title: Text("Location Permissions"),
-            content: Text("Deze app verzameld uw locatiegegevens om u te voorzien van de juiste route informatie. Dit gebeurt ook als de app gesloten is. Zodra u uitlogt stopt het verzamelen van locatiegegevens. Geef in het volgende dialoog toestemming voor het gebruik van uw locatiegegevens."),
+            content: Text("Deze app verzamelt uw locatiegegevens zodat u de juiste route delen ontvangt, u op de posten kunt inchecken en de organisatie van het evenement uw voortgang kan monitoren. Dit gebeurt ook als de app gesloten is. Zodra u uitlogt stopt het verzamelen van locatiegegevens. Geef in het volgende dialoog toestemming voor het gebruik van uw locatiegegevens."),
             actions: <Widget>[
               TextButton(
                 child: Text("Cancel"),

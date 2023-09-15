@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-Widget LoadingWidget () {
+Widget loadingWidget () {
   return const Scaffold(
     body: Center(
       child: CircularProgressIndicator(),
