@@ -4,7 +4,7 @@ import 'package:just_audio/just_audio.dart';
 class AudioPlayerWidget extends StatefulWidget {
   final String audioUrl;
 
-  AudioPlayerWidget({required this.audioUrl});
+  const AudioPlayerWidget({super.key, required this.audioUrl});
 
   @override
   _AudioPlayerWidgetState createState() => _AudioPlayerWidgetState();
@@ -12,7 +12,7 @@ class AudioPlayerWidget extends StatefulWidget {
 
 class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
   late AudioPlayer _audioPlayer;
-  ConcatenatingAudioSource _audioSource = ConcatenatingAudioSource(children: []);
+  final ConcatenatingAudioSource _audioSource = ConcatenatingAudioSource(children: []);
 
   @override
   void initState() {

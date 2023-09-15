@@ -10,9 +10,6 @@ import 'package:tapa_hike/services/location.dart';
 import 'package:tapa_hike/pages/home.dart';
 import 'package:tapa_hike/pages/hike.dart';
 
-
-
-
 void sendLastLocationData() {
   Stream bgLocationStream = Geolocator.getPositionStream(locationSettings: locationSettings).map(
     (Position position) => positionToLatLng(position)
@@ -49,8 +46,6 @@ void callbackDispatcher() {
     }
     return Future.value(true);
   });
-
-  runApp(MyApp());
 }
 
 void main() {
@@ -59,9 +54,6 @@ void main() {
     callbackDispatcher,
     isInDebugMode: true,
   );
-
-  
-
   runApp(MyApp());
 }
 
@@ -73,8 +65,8 @@ class MyApp extends StatelessWidget {
       theme: hikeTheme,
       initialRoute: "/home",
       routes: {
-        '/home': (context) => HomePage(),
-        '/hike': (context) => HikePage(),
+        '/home': (context) => const HomePage(),
+        '/hike': (context) => const HikePage(),
       },
     );
   }

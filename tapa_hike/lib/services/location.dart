@@ -59,7 +59,7 @@ class Destination {
   );
 
   bool inRadius (LatLng current) {
-    double distance = Distance().as(LengthUnit.Meter, location, current);
+    double distance = const Distance().as(LengthUnit.Meter, location, current);
     return distance<=radius;
   }
 }

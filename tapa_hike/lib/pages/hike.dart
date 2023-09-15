@@ -17,7 +17,7 @@ import 'package:tapa_hike/widgets/loading.dart';
 import 'package:tapa_hike/widgets/routes.dart';
 
 class HikePage extends StatefulWidget {
-  const HikePage({ super.key });
+  const HikePage({super.key});
 
   @override
   State<HikePage> createState() => _HikePageState();
@@ -76,8 +76,6 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
     Workmanager().cancelByTag('background_task');
   }
 
-
-
   // void sendLastLocationData() {
   //   print('Sending last location');
   //   socketConnection.sendJson({
@@ -89,32 +87,29 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
   //   });
   // }
 
-
   void removeAuthStr() async {
     SharedPreferences localStore = await SharedPreferences.getInstance();
     localStore.remove("authStr");
   }
 
+  void resetHikeData() => setState(() {
+        hikeData = null;
+        reachedLocationId = null;
+        destinations = [];
+        showConfirm = false;
+      });
 
-  void resetHikeData () => setState(() {
-    hikeData = null;
-    reachedLocationId = null;
-    destinations = [];
-    showConfirm = false;
-  });
-
-  void receiveHikeData () async {    
+  void receiveHikeData() async {
     socketConnection.sendJson({"endpoint": "newLocation"});
-    socketConnection.listenOnce(socketConnection.locationStream).then((event) { 
+    socketConnection.listenOnce(socketConnection.locationStream).then((event) {
       setState(() {
-        hikeData = event;        
+        hikeData = event;
         destinations = parseDestinations(hikeData!["data"]["coordinates"]);
       });
     });
   }
 
-
-  Future destinationReached (destinations) {
+  Future destinationReached(destinations) {
     final completer = Completer();
     late StreamSubscription subscription;
 
@@ -126,12 +121,11 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
         completer.complete(destination);
       }
     });
-    
+
     return completer.future;
   }
 
-
-  void setupLocationThings () async {
+  void setupLocationThings() async {
     if (showConfirm || destinations == []) return;
 
     // before destination reached but hiking
@@ -139,11 +133,10 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
     _startBackgroundTask();
 
     Destination destination = await destinationReached(destinations);
-    
+
     // after destination reached
     //stopCronjob();
     _cancelBackgroundTask();
-
 
     if (destination.confirmByUser) {
       setState(() {
@@ -158,7 +151,6 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-
     // if not hike data: recieve
     if (hikeData == null) {
       receiveHikeData();
@@ -166,7 +158,6 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
     }
 
     setupLocationThings();
-
 
     //Confirm button
     bool isConfirming = false; // Track whether confirmation is in progress
@@ -189,16 +180,11 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
       backgroundColor: isConfirming ? Colors.grey : Colors.red,
     );
 
-
-
-
-
-
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
         title: const Text("TapawingoHike 2023"),
-        actions: <Widget>[          
+        actions: <Widget>[
           IconButton(
             onPressed: () {
               setState(() {
@@ -213,7 +199,9 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
               }
             },
             icon: Icon(
-              keepScreenOn ? Icons.screen_lock_rotation : Icons.screen_lock_portrait,
+              keepScreenOn
+                  ? Icons.screen_lock_rotation
+                  : Icons.screen_lock_portrait,
             ),
           ),
           IconButton(
@@ -225,9 +213,8 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
 
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (context) => HomePage()),
+                MaterialPageRoute(builder: (context) => const HomePage()),
               );
-              
             },
           ), //IconButton
         ], //<Widget>[]

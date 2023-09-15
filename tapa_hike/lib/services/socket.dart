@@ -10,9 +10,13 @@ class SocketConnection {
   late Stream mainStream;
   late Map channelMapping;
   String authStr = '';
+  bool authResult = false;
 
   final StreamController locationStreamController = StreamController.broadcast();
   Stream get locationStream => locationStreamController.stream;
+
+  final StreamController authStreamController = StreamController.broadcast();
+  Stream get authStream => authStreamController.stream;
 
   void _initConnection() {
     channel = WebSocketChannel.connect(Uri.parse('ws://$domain/ws/app/'));
@@ -21,6 +25,7 @@ class SocketConnection {
 
     channelMapping = {
       "route": locationStreamController,
+      "auth": authStreamController,
     };
 
     mainStream.listen((event) {
@@ -65,16 +70,27 @@ class SocketConnection {
     return completer.future;
   }
 
-  void authenticate(String authString) {
-    authStr = authString;
-    if( authStr.isNotEmpty ) {          
+  Future<bool> authenticate(String authString) async {
+    authResult = false;
+
+    if (authString.isNotEmpty) {
       sendJson({
         "endpoint": "authenticate",
         "data": {
-          "authStr": authStr,
+          "authStr": authString,
         },
       });
+      try {
+        final response = await socketConnection.listenOnce(socketConnection.authStream);
+
+        authResult = response["result"] == 1;
+      } catch (e) {
+        // Handle any errors that might occur during the network call.
+        print("Error: $e");
+      }
     }
+
+    return authResult;
   }
 
   static void closeAndReconnect() {
