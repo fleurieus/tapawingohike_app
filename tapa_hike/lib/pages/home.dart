@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:tapa_hike/services/socket.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tapa_hike/services/storage.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -29,9 +29,8 @@ class _HomePageState extends State<HomePage> {
   Future<void> login(String authStr) async {
     try {
       bool authResult = await socketConnection.authenticate(authStr);
-
       if (authResult) {
-        await saveAuthStringToLocalStorage(authStr);
+        LocalStorage.saveString("authStr", authStr);
         navigateToHikePage();
       } else {
         // Display a dialog when authentication fails
@@ -44,13 +43,9 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> saveAuthStringToLocalStorage(String authStr) async {
-    SharedPreferences localStore = await SharedPreferences.getInstance();
-    await localStore.setString("authStr", authStr);
-  }
-
   void navigateToHikePage() {
     if (mounted) {
+      print('navigateToHikePage');
       Navigator.pushReplacementNamed(context, "/hike");
     }
   }
@@ -60,11 +55,11 @@ class _HomePageState extends State<HomePage> {
       context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
-          title: Text("Inloggen niet gelukt"),
-          content: Text("Controleer of de teamcode correct is ingevoerd en probeer opnieuw."),
+          title: const Text("Inloggen niet gelukt"),
+          content: const Text("Controleer of de teamcode correct is ingevoerd en probeer opnieuw."),
           actions: <Widget>[
             TextButton(
-              child: Text("OK"),
+              child: const Text("OK"),
               onPressed: () {
                 Navigator.of(dialogContext).pop(); // Close the dialog
               },
@@ -75,9 +70,50 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Future<bool> showLocationPermissionDialog(BuildContext context) async {
+    bool result = false;
+
+    await showDialog<bool>(
+      barrierDismissible: false,
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text("Toestemming voor locatiegegevens"),
+          content: const Text(
+              "Deze app verzamelt uw locatiegegevens zodat u de juiste route delen ontvangt, u op de posten kunt inchecken en de organisatie van het evenement uw voortgang kan monitoren. Dit gebeurt ook als de app gesloten is. Zodra u uitlogt stopt het verzamelen van locatiegegevens. Geef in het volgende dialoog toestemming voor het gebruik van uw locatiegegevens."),
+          actions: <Widget>[
+            TextButton(
+              child: const Text("Cancel"),
+              onPressed: () {
+                if (mounted) {
+                  Navigator.of(dialogContext).pop(false); // Return false when Cancel is pressed
+                }
+              },
+            ),
+            TextButton(
+              child: const Text("OK"),
+              onPressed: () async {
+                if (mounted) {
+                  Navigator.of(dialogContext).pop(true); // Return true when OK is pressed
+                  //await Geolocator.requestPermission();
+                }
+              },
+            ),
+          ],
+        );
+      },
+    ).then((dialogResult) {
+      result = dialogResult ?? false; // Use dialogResult if it's not null, otherwise default to false
+    });
+
+    return result;
+  }
+
   Future<void> loginAndPermissions(String authStr, BuildContext context) async {
     var serviceEnabled = await Geolocator.isLocationServiceEnabled();
     var permission = await Geolocator.checkPermission();
+
+    final currentContext = context; // Capture the context before the async operation
 
     if (!serviceEnabled ||
         ([
@@ -85,35 +121,7 @@ class _HomePageState extends State<HomePage> {
           LocationPermission.deniedForever,
           LocationPermission.unableToDetermine,
         ].contains(permission))) {
-      bool shouldRequestPermissions = await showDialog(
-        barrierDismissible: false,
-        context: context,
-        builder: (BuildContext dialogContext) {
-          return AlertDialog(
-            title: Text("Location Permissions"),
-            content: Text("Deze app verzamelt uw locatiegegevens zodat u de juiste route delen ontvangt, u op de posten kunt inchecken en de organisatie van het evenement uw voortgang kan monitoren. Dit gebeurt ook als de app gesloten is. Zodra u uitlogt stopt het verzamelen van locatiegegevens. Geef in het volgende dialoog toestemming voor het gebruik van uw locatiegegevens."),
-            actions: <Widget>[
-              TextButton(
-                child: const Text("Cancel"),
-                onPressed: () {
-                  if (mounted) {
-                    Navigator.of(context).pop(false); // Return false when Cancel is pressed
-                  }
-                },
-              ),
-              TextButton(
-                child: const Text("OK"),
-                onPressed: () async {
-                  if (mounted) {
-                    Navigator.of(context).pop(true); // Return true when OK is pressed
-                    //await Geolocator.requestPermission();
-                  }
-                },
-              ),
-            ],
-          );
-        },
-      );
+      bool shouldRequestPermissions = await showLocationPermissionDialog(currentContext);
 
       if (shouldRequestPermissions) {
         // Request location permissions
@@ -131,9 +139,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> checkAndLogin() async {
-    SharedPreferences localStore = await SharedPreferences.getInstance();
-    String authStr = localStore.getString("authStr") ?? '';
-
+    String authStr = await LocalStorage.getString("authStr") ?? '';
     if (authStr.isNotEmpty) {
       login(authStr);
     }

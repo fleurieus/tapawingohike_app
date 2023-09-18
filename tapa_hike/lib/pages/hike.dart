@@ -1,15 +1,16 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:tapa_hike/main.dart';
 import 'package:wakelock/wakelock.dart';
-
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:tapa_hike/pages/home.dart';
 
 import 'package:tapa_hike/services/socket.dart';
 import 'package:tapa_hike/services/location.dart';
+import 'package:tapa_hike/services/storage.dart';
 
 import 'package:workmanager/workmanager.dart';
 
@@ -29,8 +30,9 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
   List destinations = [];
   bool showConfirm = false;
   bool keepScreenOn = false;
+  bool showUndo = false;
   late LatLng lastLocation;
-
+  String storedDestHash = '';
 
   @override
   void initState() {
@@ -47,13 +49,26 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      //reconnect      
-      socketConnection.reconnect();      
+      //reconnect
+      socketConnection.reconnect();
     }
   }
 
+  @override
+  void didUpdateWidget(covariant HikePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    fetchStoredDestHash(); // Call the asynchronous function when the widget is updated
+  }
+
+  Future<void> fetchStoredDestHash() async {
+    String pingStr = await LocalStorage.getString("pingStr") ?? '';
+    setState(() {
+      storedDestHash = pingStr; // Update the state variable
+    });
+  }
+
   void _startBackgroundTask() {
-    print('_startBackgroundTask');
+    //print('_startBackgroundTask');
     Workmanager().registerPeriodicTask(
       'background_task',
       'locationUpdate',
@@ -63,33 +78,15 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
       ),
     );
 
-
-    
     Workmanager().registerOneOffTask(
-        'simpleDelayedTask',
-        'locationUpdate',
-        initialDelay: Duration(seconds: 10),
-      );    
+      'simpleDelayedTask',
+      'locationUpdate',
+      initialDelay: const Duration(seconds: 10),
+    );
   }
 
   void _cancelBackgroundTask() {
     Workmanager().cancelByTag('background_task');
-  }
-
-  // void sendLastLocationData() {
-  //   print('Sending last location');
-  //   socketConnection.sendJson({
-  //     "endpoint": "updateLocation",
-  //     "data": {
-  //       "lat": lastLocation.latitude,
-  //       "lng": lastLocation.longitude
-  //     }
-  //   });
-  // }
-
-  void removeAuthStr() async {
-    SharedPreferences localStore = await SharedPreferences.getInstance();
-    localStore.remove("authStr");
   }
 
   void resetHikeData() => setState(() {
@@ -97,14 +94,32 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
         reachedLocationId = null;
         destinations = [];
         showConfirm = false;
+        showUndo = false;
       });
 
   void receiveHikeData() async {
-    socketConnection.sendJson({"endpoint": "newLocation"});
+    //request new Location
+    socketConnection.sendJson({'endpoint': 'newLocation'});
     socketConnection.listenOnce(socketConnection.locationStream).then((event) {
       setState(() {
         hikeData = event;
         destinations = parseDestinations(hikeData!["data"]["coordinates"]);
+        showUndo = hikeData!["data"]["hasUndoableCompletions"] == true;
+
+        //save lat's and lng's to localStorage, to use in WorkManager
+        final latLngList = destinations.map((dest) {
+          return {
+            'lat': dest.location.latitude,
+            'lng': dest.location.longitude,
+          };
+        }).toList();
+        LocalStorage.saveString("destinations", json.encode(latLngList));
+
+        //nieuwe locaties waarvoor nog geen notificatie is gegeven? Vlaggetje pingStr verwijderen, wordt dan door de background task aangemaakt
+        String toStoreHash = generateMd5(json.encode(latLngList));
+        if (toStoreHash != storedDestHash) {
+          LocalStorage.remove("pingStr");
+        }
       });
     });
   }
@@ -129,13 +144,11 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
     if (showConfirm || destinations == []) return;
 
     // before destination reached but hiking
-    //startCronjob(sendLastLocationData, 1);
     _startBackgroundTask();
 
     Destination destination = await destinationReached(destinations);
 
     // after destination reached
-    //stopCronjob();
     _cancelBackgroundTask();
 
     if (destination.confirmByUser) {
@@ -147,6 +160,53 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
       socketConnection.sendJson(locationConfirmdData(destination.id));
       resetHikeData();
     }
+  }
+
+  void verifyUndoCompletion() async {
+    bool confirm = await showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text("Terug naar vorige post"),
+          content: const Text(
+              "Weet je zeker dat je terug wilt naar de vorige aanwijzing? Je kunt deze actie niet ongedaan maken, anders dan door naar de bijbehorende locatie te gaan."),
+          actions: <Widget>[
+            TextButton(
+              child: const Text("Nee, stop"),
+              onPressed: () {
+                Navigator.of(dialogContext).pop(false); // Return false when Cancel is pressed
+              },
+            ),
+            TextButton(
+              child: const Text("Ja, ik weet het zeker"),
+              onPressed: () {
+                Navigator.of(dialogContext).pop(true); // Return true when Approve is pressed
+              },
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm == true) {
+      // Call the undoCompletion method here
+      undoCompletion();
+    }
+  }
+
+  void undoCompletion() {
+    socketConnection.sendJson({"endpoint": "undoCompletion"});
+    resetHikeData();
+  }
+
+  logout() async {
+    await LocalStorage.remove("authStr");
+    SocketConnection.closeAndReconnect();
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const HomePage()),
+    );
   }
 
   @override
@@ -162,19 +222,20 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
     //Confirm button
     bool isConfirming = false; // Track whether confirmation is in progress
     FloatingActionButton confirmButton = FloatingActionButton.extended(
-      onPressed: !isConfirming ? () async {
-        setState(() {
-          isConfirming = true;
-        });
+      onPressed: !isConfirming
+          ? () async {
+              setState(() {
+                isConfirming = true;
+              });
 
-        socketConnection.sendJson(locationConfirmdData(reachedLocationId));
-        //hier willen we eigenlijk een bevestiging terug en dan pas de state wijzigen
-        setState(() {
-          isConfirming = false;
-          resetHikeData();
-        });
-      
-      } : null,
+              socketConnection.sendJson(locationConfirmdData(reachedLocationId));
+              //hier willen we eigenlijk een bevestiging terug en dan pas de state wijzigen
+              setState(() {
+                isConfirming = false;
+                resetHikeData();
+              });
+            }
+          : null,
       label: const Text('Volgende'),
       icon: const Icon(Icons.thumb_up),
       backgroundColor: isConfirming ? Colors.grey : Colors.red,
@@ -185,6 +246,13 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
       appBar: AppBar(
         title: const Text("TapawingoHike 2023"),
         actions: <Widget>[
+          if (showUndo)
+            IconButton(
+              onPressed: () {
+                verifyUndoCompletion();
+              },
+              icon: const Icon(Icons.undo),
+            ),
           IconButton(
             onPressed: () {
               setState(() {
@@ -199,22 +267,14 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
               }
             },
             icon: Icon(
-              keepScreenOn
-                  ? Icons.screen_lock_rotation
-                  : Icons.screen_lock_portrait,
+              keepScreenOn ? Icons.screen_lock_rotation : Icons.screen_lock_portrait,
             ),
           ),
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Uitloggen',
             onPressed: () {
-              removeAuthStr();
-              SocketConnection.closeAndReconnect();
-
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => const HomePage()),
-              );
+              logout();
             },
           ), //IconButton
         ], //<Widget>[]
@@ -232,13 +292,3 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
     );
   }
 }
-
-// FloatingActionButton.extended(
-//         onPressed: () {
-//           socketConnection.sendJson(locationConfirmdData(reachedLocationId));
-//           resetHikeData();
-//         },
-//         label: const Text('Volgende'),
-//         icon: const Icon(Icons.thumb_up),
-//         backgroundColor: Colors.red,
-//       )
