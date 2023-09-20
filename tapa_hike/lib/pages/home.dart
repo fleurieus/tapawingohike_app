@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:tapa_hike/services/socket.dart';
 import 'package:tapa_hike/services/storage.dart';
+//import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -45,7 +46,7 @@ class _HomePageState extends State<HomePage> {
 
   void navigateToHikePage() {
     if (mounted) {
-      print('navigateToHikePage');
+      //print('navigateToHikePage');
       Navigator.pushReplacementNamed(context, "/hike");
     }
   }
@@ -128,6 +129,10 @@ class _HomePageState extends State<HomePage> {
         //await Geolocator.requestPermission();
         //login(authStr);
         var permissionStatus = await Geolocator.requestPermission();
+
+        // FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+        // flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()!.requestPermission();
+
         if (permissionStatus == LocationPermission.always || permissionStatus == LocationPermission.whileInUse) {
           login(authStr);
         }

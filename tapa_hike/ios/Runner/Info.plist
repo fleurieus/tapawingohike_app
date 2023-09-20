@@ -16,6 +16,13 @@
 		<string>workmanager.background.task</string>
 	</array>
 
+	<!-- notifications -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
+	
 	<!-- Permission options for the location` group -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Need location when in use</string> <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

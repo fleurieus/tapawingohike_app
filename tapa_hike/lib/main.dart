@@ -7,16 +7,45 @@ import 'package:workmanager/workmanager.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:tapa_hike/services/socket.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:tapa_hike/services/location.dart';
 import 'package:tapa_hike/services/storage.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:tapa_hike/pages/home.dart';
 import 'package:tapa_hike/pages/hike.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+int messageID = 0;
 
-Future<bool> sendLocationData() async {
+@pragma('vm:entry-point')
+void callbackDispatcher() {
+  Workmanager().executeTask((task, inputData) async {
+    if (task == 'locationUpdate') {
+      return Future.value(sendLocationData(inputData!));
+    }
+
+    return Future.value(false);
+  });
+}
+
+Future<String?> saveToSharedPreferences(String key, String value) async {
+  final sharedPreference = await SharedPreferences.getInstance();
+  if (value.isNotEmpty) {
+    sharedPreference.setString(key, value);
+    return value;
+  } else {
+    return sharedPreference.getString(key);
+  }
+}
+
+Future<bool> sendLocationData(Map<String, dynamic> inputData) async {
+  String? authStr = await saveToSharedPreferences('authStr', inputData['authStr'] ?? '');
+  String? destsJson = await saveToSharedPreferences('destsJson', inputData['destsJson'] ?? '');
+
+  if (authStr == null || authStr.isEmpty || destsJson == null || destsJson.isEmpty) {
+    return false;
+  }
+
   try {
     Position position = await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.best,
@@ -25,53 +54,56 @@ Future<bool> sendLocationData() async {
     double latitude = position.latitude;
     double longitude = position.longitude;
 
-    SocketConnection mySocketConnection = SocketConnection();
-    await mySocketConnection.onConnected;
+    SocketConnection workmanagerSocket = SocketConnection();
+    await workmanagerSocket.onConnected;
 
-    String authStr = (await LocalStorage.getString("authStr")) ?? '';
+    bool authResult = await workmanagerSocket.authenticate(authStr);
+    if (!authResult) {
+      return false;
+    }
 
-    mySocketConnection.authenticate(authStr);
-    mySocketConnection.sendJson({
+    workmanagerSocket.sendJson({
       "endpoint": "updateLocation",
       "data": {"lat": latitude, "lng": longitude}
     });
 
-    String pingStr = (await LocalStorage.getString("pingStr")) ?? '';
+    workmanagerSocket.close(4005, "background task leaving");
 
-    if (pingStr == '') {
-      final LatLng curLocation = LatLng(latitude, longitude);
-      final String latLngStr = (await LocalStorage.getString("destinations")) ?? '';
+    // String pingStr = (await LocalStorage.getString("pingStr")) ?? '';
 
-      if (latLngStr != '') {
-        final latLngList = json.decode(latLngStr);
-        for (var latLngMap in latLngList) {
-          final double? destLatitude = latLngMap['lat'] as double?;
-          final double? destLongitude = latLngMap['lng'] as double?;
+    // if (pingStr == '') {
+    //   final LatLng curLocation = LatLng(latitude, longitude);
 
-          if (destLatitude != null && destLongitude != null) {
-            final double distance = await Geolocator.distanceBetween(
-              curLocation.latitude,
-              curLocation.longitude,
-              destLatitude,
-              destLongitude,
-            );
+    //   if (destsJson != '') {
+    //     final latLngList = json.decode(destsJson);
+    //     for (var latLngMap in latLngList) {
+    //       final double? destLatitude = latLngMap['lat'] as double?;
+    //       final double? destLongitude = latLngMap['lng'] as double?;
 
-            //print('Distance to destination: $distance meters');
+    //       if (destLatitude != null && destLongitude != null) {
+    //         final double distance = Geolocator.distanceBetween(
+    //           curLocation.latitude,
+    //           curLocation.longitude,
+    //           destLatitude,
+    //           destLongitude,
+    //         );
 
-            if (distance <= 800) {
-              // Notify the user when the distance is 1000 meters or less
-              await showNotification();
+    //         //print('Distance to destination: $distance meters');
 
-              //set pingStr, so it doesn't ping every time
-              String toStoreHash = generateMd5(json.encode(latLngList));
-              LocalStorage.saveString("pingStr", toStoreHash);
-            }
-          } else {
-            //print('Invalid latitude or longitude for a destination');
-          }
-        }
-      }
-    }
+    //         if (distance <= 850 && distance >= 50) {
+    //           // Notify the user when the distance is 1000 meters or less
+    //           await showNotification();
+
+    //           //set pingStr, so it doesn't ping every time
+    //           String toStoreHash = generateMd5(json.encode(latLngList));
+    //           LocalStorage.saveString("pingStr", toStoreHash);
+    //         }
+    //       } else {
+    //         //print('Invalid latitude or longitude for a destination');
+    //       }
+    //     }
+    //   }
+    // }
 
     return true;
   } catch (e) {
@@ -80,28 +112,24 @@ Future<bool> sendLocationData() async {
   }
 }
 
-void callbackDispatcher() {
-  Workmanager().executeTask((task, inputData) async {
-    if (task == 'locationUpdate') {
-      return Future.value(sendLocationData());
-    }
-    return Future.value(false);
-  });
-}
-
 Future<void> showNotification() async {
-  const AndroidNotificationDetails androidPlatformChannelSpecifics = AndroidNotificationDetails('tapa_hike_101', 'TapawingoHike',
+  //print('showNotification');
+  const AndroidNotificationDetails androidNotificationDetails = AndroidNotificationDetails('com.florido.tapa_hike.message', 'TapawingoHike',
       channelDescription: 'TapawingoHike',
       importance: Importance.max,
-      priority: Priority.high,
-      sound: RawResourceAndroidNotificationSound('knock_knock'));
+      priority: Priority.max,
+      playSound: true,
+      sound: RawResourceAndroidNotificationSound('notification2'),
+      icon: '@mipmap/ic_launcher',
+      visibility: NotificationVisibility.public,
+      fullScreenIntent: true);
 
-  const NotificationDetails platformChannelSpecifics = NotificationDetails(android: androidPlatformChannelSpecifics);
+  const NotificationDetails notificationDetails = NotificationDetails(android: androidNotificationDetails);
   await flutterLocalNotificationsPlugin.show(
-    0,
+    messageID++,
     'Je nadert een post',
     'Gefeliciteerd, je komt in de buurt van een post!',
-    platformChannelSpecifics,
+    notificationDetails,
   );
 }
 
@@ -113,9 +141,9 @@ void main() async {
   );
   await socketConnection.onConnected;
 
-  final initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
-  final initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
-  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  // final initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
+  // final initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
+  // await flutterLocalNotificationsPlugin.initialize(initializationSettings);
 
   runApp(const MyApp());
 }

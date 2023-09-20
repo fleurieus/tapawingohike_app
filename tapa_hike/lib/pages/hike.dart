@@ -32,6 +32,7 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
   bool keepScreenOn = false;
   bool showUndo = false;
   late LatLng lastLocation;
+  String destsJson = '';
   String storedDestHash = '';
 
   @override
@@ -67,26 +68,39 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
     });
   }
 
-  void _startBackgroundTask() {
+  void _startBackgroundTask() async {
     //print('_startBackgroundTask');
+    String authStr = await LocalStorage.getString("authStr") ?? '';
     Workmanager().registerPeriodicTask(
       'background_task',
       'locationUpdate',
+      inputData: <String, dynamic>{
+        'authStr': authStr,
+        'destsJson': destsJson,
+      },
       frequency: const Duration(minutes: 15),
+      initialDelay: const Duration(minutes: 5),
       constraints: Constraints(
         networkType: NetworkType.connected,
       ),
     );
 
-    Workmanager().registerOneOffTask(
-      'simpleDelayedTask',
-      'locationUpdate',
-      initialDelay: const Duration(seconds: 10),
-    );
+    // Workmanager().registerOneOffTask(
+    //   "oneoff_task",
+    //   'locationUpdate',
+    //   inputData: <String, dynamic>{
+    //     'authStr': authStr,
+    //     'destsJson': destsJson,
+    //   },
+    //   initialDelay: const Duration(seconds: 30),
+    //   constraints: Constraints(
+    //     networkType: NetworkType.connected,
+    //   ),
+    // );
   }
 
   void _cancelBackgroundTask() {
-    Workmanager().cancelByTag('background_task');
+    Workmanager().cancelAll();
   }
 
   void resetHikeData() => setState(() {
@@ -99,7 +113,9 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
 
   void receiveHikeData() async {
     //request new Location
-    socketConnection.sendJson({'endpoint': 'newLocation'});
+    //print('receiveHikeData');
+    await Future.delayed(const Duration(milliseconds: 700));
+
     socketConnection.listenOnce(socketConnection.locationStream).then((event) {
       setState(() {
         hikeData = event;
@@ -113,6 +129,7 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
             'lng': dest.location.longitude,
           };
         }).toList();
+        destsJson = json.encode(latLngList);
         LocalStorage.saveString("destinations", json.encode(latLngList));
 
         //nieuwe locaties waarvoor nog geen notificatie is gegeven? Vlaggetje pingStr verwijderen, wordt dan door de background task aangemaakt
@@ -122,6 +139,7 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
         }
       });
     });
+    socketConnection.sendJson({'endpoint': 'newLocation'});
   }
 
   Future destinationReached(destinations) {
