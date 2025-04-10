@@ -262,7 +262,7 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text("TapawingoHike 2023"),
+        title: const Text("TapawingoHike"),
         actions: <Widget>[
           if (showUndo)
             IconButton(

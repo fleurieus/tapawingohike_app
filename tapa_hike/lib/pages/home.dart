@@ -156,7 +156,7 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Login bij TapawingoHike 2023'),
+        title: const Text('Login bij TapawingoHike'),
       ),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 60),
