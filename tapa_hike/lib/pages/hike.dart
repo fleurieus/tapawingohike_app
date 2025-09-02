@@ -4,7 +4,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:tapa_hike/main.dart';
-import 'package:wakelock/wakelock.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:geolocator/geolocator.dart';
+
 
 import 'package:tapa_hike/pages/home.dart';
 
@@ -16,6 +18,9 @@ import 'package:workmanager/workmanager.dart';
 
 import 'package:tapa_hike/widgets/loading.dart';
 import 'package:tapa_hike/widgets/routes.dart';
+import 'package:tapa_hike/widgets/legendrow.dart';
+
+ enum GpsStatus { noSignal, acquiring, fix }
 
 class HikePage extends StatefulWidget {
   const HikePage({super.key});
@@ -35,6 +40,13 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
   String destsJson = '';
   String storedDestHash = '';
 
+ 
+
+  GpsStatus _gpsStatus = GpsStatus.noSignal;
+  StreamSubscription<Position>? _gpsSub;
+  Timer? _gpsStaleTimer;
+
+
   @override
   void initState() {
     super.initState();
@@ -44,6 +56,8 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _gpsSub?.cancel();
+    _gpsStaleTimer?.cancel();
     super.dispose();
   }
 
@@ -227,6 +241,87 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
     );
   }
 
+
+  IconData get _gpsIcon {
+    switch (_gpsStatus) {
+      case GpsStatus.fix: return Icons.gps_fixed;
+      case GpsStatus.acquiring: return Icons.gps_not_fixed;
+      case GpsStatus.noSignal: default: return Icons.gps_off;
+    }
+  }
+
+  Color get _gpsColor {
+    switch (_gpsStatus) {
+      case GpsStatus.fix: return Colors.white;            // zoals gevraagd
+      case GpsStatus.acquiring: return Colors.orange;
+      case GpsStatus.noSignal: default: return Colors.red;
+    }
+  }
+
+  Future<void> _initGpsStatusWatcher() async {
+    if (mounted) setState(() => _gpsStatus = GpsStatus.noSignal);
+    
+
+    // Nauwkeurigheidsdrempels kun je tweaken
+    const accuracyGoodMeters = 30.0;
+    const staleAfter = Duration(seconds: 12);
+
+    const locationSettings = LocationSettings(
+      accuracy: LocationAccuracy.best, // hoge nauwkeurigheid
+      distanceFilter: 0,
+    );
+
+    _gpsSub?.cancel();
+    _gpsSub = Geolocator.getPositionStream(locationSettings: locationSettings).listen(
+      (Position pos) {
+        // Reset no-signal timer bij elke update
+        _gpsStaleTimer?.cancel();
+        _gpsStaleTimer = Timer(staleAfter, () {
+          if (mounted) setState(() => _gpsStatus = GpsStatus.noSignal);
+        });
+
+        final acc = pos.accuracy; // in meters
+        final next = acc <= accuracyGoodMeters ? GpsStatus.fix : GpsStatus.acquiring;
+        if (mounted) setState(() => _gpsStatus = next);
+      },
+      onError: (_) {
+        if (mounted) setState(() => _gpsStatus = GpsStatus.noSignal);
+      },
+    );
+  }
+
+
+
+  void _showGpsLegend() {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('GPS status'),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              LegendRow(color: Colors.white, text: 'Wit - vaste fix, goede nauwkeurigheid'),
+              SizedBox(height: 8),
+              LegendRow(color: Colors.orange, text: 'Oranje - bezig met fix (nauwkeurigheid nog matig)'),
+              SizedBox(height: 8),
+              LegendRow(color: Colors.red, text: 'Rood - geen signaal of geen updates'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+
+
   @override
   Widget build(BuildContext context) {
     // if not hike data: recieve
@@ -279,9 +374,9 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
 
               // Toggle screen wake lock state
               if (keepScreenOn) {
-                Wakelock.enable();
+                WakelockPlus.enable();
               } else {
-                Wakelock.disable();
+                WakelockPlus.disable();
               }
             },
             icon: Icon(
@@ -289,12 +384,17 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
             ),
           ),
           IconButton(
+            tooltip: 'GPS status',
+            onPressed: _showGpsLegend,
+            icon: Icon(_gpsIcon, color: _gpsColor),
+          ),
+          IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Uitloggen',
             onPressed: () {
               logout();
             },
-          ), //IconButton
+          ), //IconButton          
         ], //<Widget>[]
         backgroundColor: Colors.green,
         elevation: 50.0,

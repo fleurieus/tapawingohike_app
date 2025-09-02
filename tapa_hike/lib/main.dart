@@ -4,17 +4,15 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:tapa_hike/theme.dart';
 import 'package:workmanager/workmanager.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:tapa_hike/services/socket.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:tapa_hike/services/storage.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+// import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:tapa_hike/pages/home.dart';
 import 'package:tapa_hike/pages/hike.dart';
 
-final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+// final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 int messageID = 0;
 
 @pragma('vm:entry-point')
@@ -112,26 +110,26 @@ Future<bool> sendLocationData(Map<String, dynamic> inputData) async {
   }
 }
 
-Future<void> showNotification() async {
-  //print('showNotification');
-  const AndroidNotificationDetails androidNotificationDetails = AndroidNotificationDetails('com.florido.tapa_hike.message', 'TapawingoHike',
-      channelDescription: 'TapawingoHike',
-      importance: Importance.max,
-      priority: Priority.max,
-      playSound: true,
-      sound: RawResourceAndroidNotificationSound('notification2'),
-      icon: '@mipmap/ic_launcher',
-      visibility: NotificationVisibility.public,
-      fullScreenIntent: true);
+// Future<void> showNotification() async {
+//   //print('showNotification');
+//   const AndroidNotificationDetails androidNotificationDetails = AndroidNotificationDetails('com.florido.tapa_hike.message', 'TapawingoHike',
+//       channelDescription: 'TapawingoHike',
+//       importance: Importance.max,
+//       priority: Priority.max,
+//       playSound: true,
+//       sound: RawResourceAndroidNotificationSound('notification2'),
+//       icon: '@mipmap/ic_launcher',
+//       visibility: NotificationVisibility.public,
+//       fullScreenIntent: true);
 
-  const NotificationDetails notificationDetails = NotificationDetails(android: androidNotificationDetails);
-  await flutterLocalNotificationsPlugin.show(
-    messageID++,
-    'Je nadert een post',
-    'Gefeliciteerd, je komt in de buurt van een post!',
-    notificationDetails,
-  );
-}
+//   const NotificationDetails notificationDetails = NotificationDetails(android: androidNotificationDetails);
+//   await flutterLocalNotificationsPlugin.show(
+//     messageID++,
+//     'Je nadert een post',
+//     'Gefeliciteerd, je komt in de buurt van een post!',
+//     notificationDetails,
+//   );
+// }
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
