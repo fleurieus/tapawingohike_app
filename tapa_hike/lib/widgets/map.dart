@@ -59,8 +59,7 @@ class _MapWidgetFMapState extends State<MapWidgetFMap> {
           ),
           children: [
             TileLayer(
-              urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-              subdomains: const ['a', 'b', 'c'],
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'net.tlserver6y.flutter_map_location_marker.',
               maxZoom: 19,
             ),
@@ -79,6 +78,7 @@ class _MapWidgetFMapState extends State<MapWidgetFMap> {
           right: 20,
           bottom: 20,
           child: FloatingActionButton(
+            backgroundColor: Colors.green,
             heroTag: 'followMebtn',
             onPressed: () {
               // opnieuw automatisch centreren + naar zoom 18
@@ -93,6 +93,7 @@ class _MapWidgetFMapState extends State<MapWidgetFMap> {
           right: 20,
           bottom: 85,
           child: FloatingActionButton(
+            backgroundColor: Colors.green,
             heroTag: 'northBtn',
             onPressed: () {
               // rotate naar noorden (0 graden)

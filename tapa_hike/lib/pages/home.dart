@@ -156,12 +156,20 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Login bij TapawingoHike'),
+        title: const Text('TapawingoHike'),
       ),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 60),
         child: Column(
           children: [
+            const Text(
+              'Welkom bij de TapawingoHike',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 30),
             TextFormField(
               controller: _authStrController,
               decoration: const InputDecoration(

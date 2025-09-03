@@ -20,7 +20,7 @@ import 'package:tapa_hike/widgets/loading.dart';
 import 'package:tapa_hike/widgets/routes.dart';
 import 'package:tapa_hike/widgets/legendrow.dart';
 
- enum GpsStatus { noSignal, acquiring, fix }
+enum GpsStatus { noSignal, acquiring, fix }
 
 class HikePage extends StatefulWidget {
   const HikePage({super.key});
@@ -51,6 +51,7 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _initGpsStatusWatcher();
   }
 
   @override
@@ -252,7 +253,7 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
 
   Color get _gpsColor {
     switch (_gpsStatus) {
-      case GpsStatus.fix: return Colors.white;            // zoals gevraagd
+      case GpsStatus.fix: return const Color.fromARGB(255, 0, 255, 8);            // zoals gevraagd
       case GpsStatus.acquiring: return Colors.orange;
       case GpsStatus.noSignal: default: return Colors.red;
     }
@@ -302,11 +303,11 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              LegendRow(color: Colors.white, text: 'Wit - vaste fix, goede nauwkeurigheid'),
+              LegendRow(color: Color.fromARGB(255, 0, 255, 8), text: 'Groen - vaste fix, goede nauwkeurigheid'),
               SizedBox(height: 8),
-              LegendRow(color: Colors.orange, text: 'Oranje - bezig met fix (nauwkeurigheid nog matig)'),
+              LegendRow(color: Colors.orange, text: 'Oranje - bezig met fix, nauwkeurigheid nog matig'),
               SizedBox(height: 8),
-              LegendRow(color: Colors.red, text: 'Rood - geen signaal of geen updates'),
+              LegendRow(color: Colors.red, text: 'Rood - geen signaal'),
             ],
           ),
           actions: [
