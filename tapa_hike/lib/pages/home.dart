@@ -1,24 +1,90 @@
+// lib/pages/home.dart
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:tapa_hike/services/socket.dart';
+import 'package:flutter/services.dart';
 import 'package:tapa_hike/services/storage.dart';
-//import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:tapa_hike/services/socket.dart'; // <- gebruikt socketConnection.authenticate
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
-  _HomePageState createState() => _HomePageState();
+  State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
-  final TextEditingController _authStrController = TextEditingController();
-  BuildContext? _context; // Initialized as null
+  final _authStrController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  bool _loggingIn = false;
+  String? _savedAuth;
 
   @override
   void initState() {
     super.initState();
-    checkAndLogin();
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    // Probeer met bewaarde authStr (zonder UI te blokkeren)
+    final saved = await LocalStorage.getString("authStr");
+    if (!mounted) return;
+
+    final trimmed = (saved ?? '').trim();
+    if (trimmed.isNotEmpty) {
+      setState(() {
+        _savedAuth = trimmed;
+        _authStrController.text = trimmed;
+      });
+      // Probeer automatisch in te loggen (zoals “vroeger”)
+      _login(trimmed);
+    }
+  }
+
+  // ======= VERSIE “zoals het eerst was” =======
+  Future<void> _login(String authStr) async {
+    if (_loggingIn) return;
+    setState(() => _loggingIn = true);
+
+    try {
+      final bool authResult = await socketConnection.authenticate(authStr);
+      if (authResult) {
+        await LocalStorage.saveString("authStr", authStr);
+        if (!mounted) return;
+        _navigateToHikePage();
+      } else {
+        if (!mounted) return;
+        _showLoginFailed();
+      }
+    } catch (e) {
+      // optioneel: feedback geven
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Inloggen mislukt: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loggingIn = false);
+    }
+  }
+  // ============================================
+
+  void _navigateToHikePage() {
+    Navigator.of(context).pushReplacementNamed('/hike');
+  }
+
+  void _showLoginFailed() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Inloggen mislukt'),
+        content: const Text('Controleer je teamcode en probeer het opnieuw.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -27,173 +93,104 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  Future<void> login(String authStr) async {
-    try {
-      bool authResult = await socketConnection.authenticate(authStr);
-      if (authResult) {
-        LocalStorage.saveString("authStr", authStr);
-        navigateToHikePage();
-      } else {
-        // Display a dialog when authentication fails
-        showLoginFailed();
-      }
-    } catch (e) {
-      // Handle any errors that might occur during authentication or storage.
-      //print("Error: $e");
-      // Optionally, you can show an error message to the user.
-    }
-  }
-
-  void navigateToHikePage() {
-    if (mounted) {
-      //print('navigateToHikePage');
-      Navigator.pushReplacementNamed(context, "/hike");
-    }
-  }
-
-  void showLoginFailed() {
-    showDialog(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text("Inloggen niet gelukt"),
-          content: const Text("Controleer of de teamcode correct is ingevoerd en probeer opnieuw."),
-          actions: <Widget>[
-            TextButton(
-              child: const Text("OK"),
-              onPressed: () {
-                Navigator.of(dialogContext).pop(); // Close the dialog
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<bool> showLocationPermissionDialog(BuildContext context) async {
-    bool result = false;
-
-    await showDialog<bool>(
-      barrierDismissible: false,
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text("Toestemming voor locatiegegevens"),
-          content: const Text(
-              "Deze app verzamelt uw locatiegegevens zodat u de juiste route delen ontvangt, u op de posten kunt inchecken en de organisatie van het evenement uw voortgang kan monitoren. Dit gebeurt ook als de app gesloten is. Zodra u uitlogt stopt het verzamelen van locatiegegevens. Geef in het volgende dialoog toestemming voor het gebruik van uw locatiegegevens."),
-          actions: <Widget>[
-            TextButton(
-              child: const Text("Cancel"),
-              onPressed: () {
-                if (mounted) {
-                  Navigator.of(dialogContext).pop(false); // Return false when Cancel is pressed
-                }
-              },
-            ),
-            TextButton(
-              child: const Text("OK"),
-              onPressed: () async {
-                if (mounted) {
-                  Navigator.of(dialogContext).pop(true); // Return true when OK is pressed
-                  //await Geolocator.requestPermission();
-                }
-              },
-            ),
-          ],
-        );
-      },
-    ).then((dialogResult) {
-      result = dialogResult ?? false; // Use dialogResult if it's not null, otherwise default to false
-    });
-
-    return result;
-  }
-
-  Future<void> loginAndPermissions(String authStr, BuildContext context) async {
-    var serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    var permission = await Geolocator.checkPermission();
-
-    final currentContext = context; // Capture the context before the async operation
-
-    if (!serviceEnabled ||
-        ([
-          LocationPermission.denied,
-          LocationPermission.deniedForever,
-          LocationPermission.unableToDetermine,
-        ].contains(permission))) {
-      bool shouldRequestPermissions = await showLocationPermissionDialog(currentContext);
-
-      if (shouldRequestPermissions) {
-        // Request location permissions
-        //await Geolocator.requestPermission();
-        //login(authStr);
-        var permissionStatus = await Geolocator.requestPermission();
-
-        // FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-        // flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()!.requestPermission();
-
-        if (permissionStatus == LocationPermission.always || permissionStatus == LocationPermission.whileInUse) {
-          login(authStr);
-        }
-      }
-    } else {
-      // Permissions are already granted, proceed with login
-      login(authStr);
-    }
-  }
-
-  Future<void> checkAndLogin() async {
-    String authStr = await LocalStorage.getString("authStr") ?? '';
-    if (authStr.isNotEmpty) {
-      login(authStr);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    _context = context; // Assign context when the widget is built
+    final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('TapawingoHike'),
       ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 60),
-        child: Column(
-          children: [
-            const Text(
-              'Welkom bij de TapawingoHike',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Titel
+                Text(
+                  'Welkom bij de TapawingoHike',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        color: scheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                const SizedBox(height: 24),
+
+                // Teamcode veld
+                TextFormField(
+                  controller: _authStrController,
+                  enabled: !_loggingIn,
+                  decoration: const InputDecoration(
+                    border: UnderlineInputBorder(),
+                    labelText: 'Login met jouw teamcode',
+                  ),
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (value) {
+                    final authStr = value.trim();
+                    if (authStr.isNotEmpty) {
+                      _login(authStr);
+                    }
+                  },
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Voer je teamcode in';
+                    }
+                    return null;
+                  },
+                  inputFormatters: [
+                    FilteringTextInputFormatter.deny(RegExp(r'^\s')),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Actieknoppen
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _loggingIn
+                            ? null
+                            : () {
+                                if (_formKey.currentState?.validate() ?? false) {
+                                  final authStr = _authStrController.text.trim();
+                                  if (authStr.isNotEmpty) {
+                                    _login(authStr);
+                                  }
+                                }
+                              },
+                        child: _loggingIn
+                            ? const SizedBox(
+                                height: 22,
+                                width: 22,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Text('Inloggen'),
+                      ),
+                    ),
+                  ],
+                ),
+
+                if (_savedAuth != null) ...[
+                  const SizedBox(height: 12),
+                  TextButton.icon(
+                    onPressed: _loggingIn ? null : () => _login(_savedAuth!),
+                    icon: const Icon(Icons.key),
+                    label: const Text('Inloggen met opgeslagen teamcode'),
+                  ),
+                ],
+
+                const SizedBox(height: 40),
+                Text(
+                  'Je teamcode wordt lokaal op jouw telefoon bewaard, zodat je bij het openen van de app automatisch weer inlogt. '
+                  'Uitloggen kan altijd vanuit het hike-scherm.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
             ),
-            const SizedBox(height: 30),
-            TextFormField(
-              controller: _authStrController,
-              decoration: const InputDecoration(
-                border: UnderlineInputBorder(),
-                labelText: 'Login met jouw teamcode',
-              ),
-              onFieldSubmitted: (value) {
-                String authStr = value.trim();
-                if (authStr.isNotEmpty) {
-                  loginAndPermissions(authStr, _context!);
-                }
-              },
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                String authStr = _authStrController.text.trim();
-                if (authStr.isNotEmpty) {
-                  loginAndPermissions(authStr, _context!);
-                }
-              },
-              child: const Text('Inloggen'),
-            ),
-          ],
+          ),
         ),
       ),
     );

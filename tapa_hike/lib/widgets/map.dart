@@ -76,7 +76,7 @@ class _MapWidgetFMapState extends State<MapWidgetFMap> {
 
         Positioned(
           right: 20,
-          bottom: 20,
+          bottom: 55,
           child: FloatingActionButton(
             backgroundColor: Colors.green,
             heroTag: 'followMebtn',
@@ -91,7 +91,7 @@ class _MapWidgetFMapState extends State<MapWidgetFMap> {
 
         Positioned(
           right: 20,
-          bottom: 85,
+          bottom: 120,
           child: FloatingActionButton(
             backgroundColor: Colors.green,
             heroTag: 'northBtn',

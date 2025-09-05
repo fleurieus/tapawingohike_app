@@ -152,6 +152,8 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       theme: hikeTheme,
+      darkTheme: hikeDarkTheme,
+      themeMode: ThemeMode.system,
       initialRoute: "/home",
       routes: {
         '/home': (context) => const HomePage(),

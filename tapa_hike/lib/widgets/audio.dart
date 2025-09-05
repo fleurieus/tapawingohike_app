@@ -7,12 +7,11 @@ class AudioPlayerWidget extends StatefulWidget {
   const AudioPlayerWidget({super.key, required this.audioUrl});
 
   @override
-  _AudioPlayerWidgetState createState() => _AudioPlayerWidgetState();
+  State<AudioPlayerWidget> createState() => _AudioPlayerWidgetState();
 }
 
 class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
-  late AudioPlayer _audioPlayer;
-  final ConcatenatingAudioSource _audioSource = ConcatenatingAudioSource(children: []);
+  late final AudioPlayer _audioPlayer;
 
   @override
   void initState() {
@@ -20,21 +19,19 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
     _initAudioPlayer();
   }
 
-  void _initAudioPlayer() async {
+  Future<void> _initAudioPlayer() async {
     _audioPlayer = AudioPlayer();
+    try {
+      await _audioPlayer.setAudioSource(
+        AudioSource.uri(Uri.parse(widget.audioUrl)),
+      );
+    } catch (_) {
+      // Je kunt hier desgewenst een snackbar of log opnemen
+    }
 
-    // Load the audio source
-    _audioSource.add(AudioSource.uri(Uri.parse(widget.audioUrl)));
-
-    await _audioPlayer.setAudioSource(_audioSource);
-
-    _audioPlayer.playbackEventStream.listen((event) {
-      // Update the player state based on the event
-      if (mounted) {
-        setState(() {
-          // Handle playback events here
-        });
-      }
+    // Eventueel state updates luisteren (optioneel)
+    _audioPlayer.playbackEventStream.listen((_) {
+      if (mounted) setState(() {});
     });
   }
 
@@ -44,58 +41,88 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
     super.dispose();
   }
 
-@override
-Widget build(BuildContext context) {
-  return SafeArea(
-    child: Row(
-      children: [
-        Expanded(
-          flex: 1,
-          child: IconButton(
-            onPressed: () {
-              if (_audioPlayer.playing) {
-                _audioPlayer.pause();
-              } else {
-                _audioPlayer.play();
-              }
-            },
-            icon: Icon(
-              _audioPlayer.playing
-                  ? Icons.pause
-                  : Icons.play_arrow,
-              color: Colors.white,
-            ),
-          ),
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    // Donkere panelkleur forceren (ook in licht thema), maar wel thematisch:
+    // In dark mode: gebruik een hoge surface container.
+    // In light mode: meng een zwarte overlay over de surface voor voldoende contrast.
+    final bool isDark = theme.brightness == Brightness.dark;
+    final Color panelColor = isDark
+        ? scheme.surfaceContainerHighest
+        : Color.alphaBlend(Colors.black.withOpacity(0.72), scheme.surface);
+
+    // Tekstkleur op het paneel (wit in light mode vanwege donkere panelkleur)
+    final Color onPanelColor = isDark ? scheme.onSurface : Colors.white;
+
+    return SafeArea(
+      top: false,
+      bottom: false,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: panelColor,
+          boxShadow: kElevationToShadow[1],
         ),
-        Expanded(
-          flex: 4,
-          child: StreamBuilder<Duration?>(
-            stream: _audioPlayer.positionStream, // Use the positionStream
-            builder: (context, snapshot) {
-              final position = snapshot.data ?? Duration.zero;
+        child: Row(
+          children: [
+            IconButton(
+              onPressed: () async {
+                if (_audioPlayer.playing) {
+                  await _audioPlayer.pause();
+                } else {
+                  await _audioPlayer.play();
+                }
+                if (mounted) setState(() {});
+              },
+              icon: Icon(_audioPlayer.playing ? Icons.pause : Icons.play_arrow),
+              color: onPanelColor,
+            ),
+            Expanded(
+              child: StreamBuilder<Duration?>(
+                stream: _audioPlayer.durationStream,
+                builder: (context, durationSnap) {
+                  final duration = durationSnap.data ?? Duration.zero;
 
-              return StreamBuilder<Duration?>(
-                stream: _audioPlayer.durationStream, // Use the durationStream
-                builder: (context, snapshot) {
-                  final duration = snapshot.data ?? Duration.zero;
+                  return StreamBuilder<Duration>(
+                    stream: _audioPlayer.positionStream,
+                    builder: (context, positionSnap) {
+                      final position = positionSnap.data ?? Duration.zero;
 
-                  return Slider(
-                    value: position.inSeconds.toDouble(),
-                    min: 0.0,
-                    max: duration.inSeconds.toDouble(),
-                    onChanged: (double value) {
-                      _audioPlayer.seek(Duration(seconds: value.toInt()));
+                      final double max =
+                          duration.inMilliseconds > 0 ? duration.inMilliseconds.toDouble() : 1.0;
+                      final double value = position.inMilliseconds
+                          .clamp(0, duration.inMilliseconds)
+                          .toDouble();
+
+                      return SliderTheme(
+                          data: SliderTheme.of(context).copyWith(
+                            activeTrackColor: onPanelColor,
+                            inactiveTrackColor: onPanelColor.withValues(alpha: 0.35),
+                            thumbColor: onPanelColor,
+                            overlayColor: onPanelColor.withValues(alpha: 0.15),
+                          ),
+                        child: Slider(
+                          value: value,
+                          min: 0.0,
+                          max: max,
+                          onChanged: duration == Duration.zero
+                              ? null
+                              : (double v) {
+                                  _audioPlayer.seek(Duration(milliseconds: v.toInt()));
+                                },
+                        ),
+                      );
                     },
                   );
                 },
-              );
-            },
-          ),
-
-        )
-      ],
-    ),
-  );
-}
-
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

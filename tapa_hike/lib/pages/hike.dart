@@ -9,7 +9,7 @@ import 'package:geolocator/geolocator.dart';
 
 
 import 'package:tapa_hike/pages/home.dart';
-
+import 'package:tapa_hike/services/auth.dart';
 import 'package:tapa_hike/services/socket.dart';
 import 'package:tapa_hike/services/location.dart';
 import 'package:tapa_hike/services/storage.dart';
@@ -21,6 +21,12 @@ import 'package:tapa_hike/widgets/routes.dart';
 import 'package:tapa_hike/widgets/legendrow.dart';
 
 enum GpsStatus { noSignal, acquiring, fix }
+
+// GPS statuskleuren – vast (niet via theme)
+const kGpsFixColor        = Color.fromARGB(255, 0, 255, 8); // groen
+const kGpsAcquiringColor  = Colors.orange;                  // oranje
+const kGpsNoSignalColor   = Colors.red;                     // rood
+
 
 class HikePage extends StatefulWidget {
   const HikePage({super.key});
@@ -40,7 +46,7 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
   String destsJson = '';
   String storedDestHash = '';
 
- 
+  bool _reconnecting = false;
 
   GpsStatus _gpsStatus = GpsStatus.noSignal;
   StreamSubscription<Position>? _gpsSub;
@@ -128,8 +134,11 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
 
   void receiveHikeData() async {
     //request new Location
+    await _ensureConnectedAndAuthenticated();
+
     //print('receiveHikeData');
     await Future.delayed(const Duration(milliseconds: 700));
+    
 
     socketConnection.listenOnce(socketConnection.locationStream).then((event) {
       setState(() {
@@ -242,6 +251,64 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
     );
   }
 
+  Future<void> _ensureConnectedAndAuthenticated() async {
+    // 1) Wacht tot de socket echt verbonden is
+    try {
+      await socketConnection.onConnected.timeout(const Duration(seconds: 5));
+    } catch (_) {
+      // fallback: forceer reconnect en wacht opnieuw
+      socketConnection.reconnect();
+      await socketConnection.onConnected.timeout(const Duration(seconds: 5));
+    }
+
+    // 2) Check of we al geauthenticeerd zijn; zo niet, doe dat met de opgeslagen authStr
+    if (!socketConnection.isAuthenticated()) {
+      final authStr = await LocalStorage.getString("authStr");
+      if (authStr == null || authStr.trim().isEmpty) {
+        throw Exception('Geen opgeslagen teamcode gevonden');
+      }
+
+      final ok = await socketConnection.authenticate(authStr.trim())
+          .timeout(const Duration(seconds: 6));
+      if (!ok) {
+        throw Exception('Authenticatie mislukt');
+      }
+    }
+  }
+
+  Future<void> _reLoginWithStoredAuth() async {
+    if (_reconnecting) return;
+    setState(() => _reconnecting = true);
+
+    try {
+      // Sluit en start een schone socket (zoals jij al eerder deed)
+      SocketConnection.closeAndReconnect();
+
+      // Zorg dat we verbonden én geauthenticeerd zijn
+      await _ensureConnectedAndAuthenticated();
+
+      // UI/data verversen
+      resetHikeData();
+      await Future.delayed(const Duration(milliseconds: 50)); // laat de UI even ademhalen
+      receiveHikeData();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Opnieuw verbonden')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Herverbinden mislukt: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _reconnecting = false);
+    }
+  }
+
+
 
   IconData get _gpsIcon {
     switch (_gpsStatus) {
@@ -253,9 +320,10 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
 
   Color get _gpsColor {
     switch (_gpsStatus) {
-      case GpsStatus.fix: return const Color.fromARGB(255, 0, 255, 8);            // zoals gevraagd
-      case GpsStatus.acquiring: return Colors.orange;
-      case GpsStatus.noSignal: default: return Colors.red;
+      case GpsStatus.fix:        return kGpsFixColor;
+      case GpsStatus.acquiring:  return kGpsAcquiringColor;
+      case GpsStatus.noSignal:
+      default:                   return kGpsNoSignalColor;
     }
   }
 
@@ -303,11 +371,11 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              LegendRow(color: Color.fromARGB(255, 0, 255, 8), text: 'Groen - vaste fix, goede nauwkeurigheid'),
+              LegendRow(color: kGpsFixColor,       text: 'Groen - vaste fix, goede nauwkeurigheid'),
               SizedBox(height: 8),
-              LegendRow(color: Colors.orange, text: 'Oranje - bezig met fix, nauwkeurigheid nog matig'),
+              LegendRow(color: kGpsAcquiringColor, text: 'Oranje - bezig met fix, nauwkeurigheid nog matig'),
               SizedBox(height: 8),
-              LegendRow(color: Colors.red, text: 'Rood - geen signaal'),
+              LegendRow(color: kGpsNoSignalColor,  text: 'Rood - geen signaal'),
             ],
           ),
           actions: [
@@ -333,6 +401,8 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
 
     setupLocationThings();
 
+    final scheme = Theme.of(context).colorScheme;
+
     //Confirm button
     bool isConfirming = false; // Track whether confirmation is in progress
     FloatingActionButton confirmButton = FloatingActionButton.extended(
@@ -352,58 +422,107 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
           : null,
       label: const Text('Volgende'),
       icon: const Icon(Icons.thumb_up),
-      backgroundColor: isConfirming ? Colors.grey : Colors.red,
+      backgroundColor: isConfirming ? scheme.surfaceContainerHighest : scheme.primary,
+      foregroundColor: isConfirming ? scheme.onSurface : scheme.onPrimary,
     );
+        
+        
 
     return Scaffold(
-      backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text("TapawingoHike"),
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text("TapawingoHike"),
+        ),
         actions: <Widget>[
           if (showUndo)
             IconButton(
-              onPressed: () {
-                verifyUndoCompletion();
-              },
+              tooltip: 'Ongedaan maken',
+              onPressed: verifyUndoCompletion,
               icon: const Icon(Icons.undo),
             ),
-          IconButton(
-            onPressed: () {
-              setState(() {
-                keepScreenOn = !keepScreenOn;
-              });
 
-              // Toggle screen wake lock state
-              if (keepScreenOn) {
-                WakelockPlus.enable();
-              } else {
-                WakelockPlus.disable();
-              }
-            },
-            icon: Icon(
-              keepScreenOn ? Icons.screen_lock_rotation : Icons.screen_lock_portrait,
-            ),
-          ),
+          // (blijft) GPS-status
           IconButton(
             tooltip: 'GPS status',
             onPressed: _showGpsLegend,
             icon: Icon(_gpsIcon, color: _gpsColor),
           ),
+
+          // (blijft) Herverbinden
           IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Uitloggen',
-            onPressed: () {
-              logout();
+            tooltip: _reconnecting ? 'Bezig met herverbinden…' : 'Herverbinden',
+            onPressed: _reconnecting ? null : _reLoginWithStoredAuth,
+            icon: _reconnecting
+                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.refresh),
+          ),
+
+          // ✅ Nieuw: overflow-menu met Scherm-aan en Uitloggen
+          PopupMenuButton<String>(
+            tooltip: 'Meer',
+            onSelected: (value) async {
+              switch (value) {
+                case 'toggle_wakelock':
+                  setState(() => keepScreenOn = !keepScreenOn);
+                  if (keepScreenOn) {
+                    await WakelockPlus.enable();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Scherm-aan ingeschakeld')),
+                      );
+                    }
+                  } else {
+                    await WakelockPlus.disable();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Scherm-aan uitgeschakeld')),
+                      );
+                    }
+                  }
+                  break;
+
+                case 'logout':
+                  logout();
+                  break;
+              }
             },
-          ), //IconButton          
-        ], //<Widget>[]
-        backgroundColor: Colors.green,
-        elevation: 50.0,
-        // leading: IconButton(
-        //   icon: const Icon(Icons.menu),
-        //   tooltip: 'Menu Icon',
-        //   onPressed: () {},
-        // ),
+            itemBuilder: (context) => [
+              PopupMenuItem<String>(
+                value: 'toggle_wakelock',
+                child: Row(
+                  children: [
+                    Icon(
+                      keepScreenOn ? Icons.screen_lock_rotation : Icons.screen_lock_portrait,
+                      color: Theme.of(context).colorScheme.onPrimary,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      keepScreenOn ? 'Scherm-aan uit' : 'Scherm-aan aan',
+                      style: TextStyle(color: Theme.of(context).colorScheme.onPrimary),
+                    ),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              PopupMenuItem<String>(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout, color: Theme.of(context).colorScheme.onPrimary),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Uitloggen',
+                      style: TextStyle(color: Theme.of(context).colorScheme.onPrimary),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+        backgroundColor: scheme.primary,
+        foregroundColor: scheme.onPrimary,
       ),
       body: hikeTypeWidgets[hikeData!["type"]](hikeData!["data"], destinations),
       floatingActionButton: (showConfirm ? confirmButton : null),
