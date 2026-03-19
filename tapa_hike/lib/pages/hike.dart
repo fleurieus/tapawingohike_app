@@ -1,20 +1,16 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:tapa_hike/main.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:geolocator/geolocator.dart';
-
+import 'package:just_audio/just_audio.dart';
 
 import 'package:tapa_hike/pages/home.dart';
 import 'package:tapa_hike/services/auth.dart';
 import 'package:tapa_hike/services/socket.dart';
 import 'package:tapa_hike/services/location.dart';
 import 'package:tapa_hike/services/storage.dart';
-
-import 'package:workmanager/workmanager.dart';
 
 import 'package:tapa_hike/widgets/loading.dart';
 import 'package:tapa_hike/widgets/routes.dart';
@@ -44,8 +40,8 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
   bool keepScreenOn = false;
   bool showUndo = false;
   late LatLng lastLocation;
-  String destsJson = '';
-  String storedDestHash = '';
+
+  final AudioPlayer _chimePlayer = AudioPlayer();
 
   bool _reconnecting = false;
 
@@ -66,6 +62,7 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _gpsSub?.cancel();
     _gpsStaleTimer?.cancel();
+    _chimePlayer.dispose();
     super.dispose();
   }
 
@@ -77,52 +74,13 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
     }
   }
 
-  @override
-  void didUpdateWidget(covariant HikePage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    fetchStoredDestHash(); // Call the asynchronous function when the widget is updated
-  }
-
-  Future<void> fetchStoredDestHash() async {
-    String pingStr = await LocalStorage.getString("pingStr") ?? '';
-    setState(() {
-      storedDestHash = pingStr; // Update the state variable
-    });
-  }
-
-  void _startBackgroundTask() async {
-    //print('_startBackgroundTask');
-    String authStr = await LocalStorage.getString("authStr") ?? '';
-    Workmanager().registerPeriodicTask(
-      'background_task',
-      'locationUpdate',
-      inputData: <String, dynamic>{
-        'authStr': authStr,
-        'destsJson': destsJson,
-      },
-      frequency: const Duration(minutes: 15),
-      initialDelay: const Duration(minutes: 5),
-      constraints: Constraints(
-        networkType: NetworkType.connected,
-      ),
-    );
-
-    // Workmanager().registerOneOffTask(
-    //   "oneoff_task",
-    //   'locationUpdate',
-    //   inputData: <String, dynamic>{
-    //     'authStr': authStr,
-    //     'destsJson': destsJson,
-    //   },
-    //   initialDelay: const Duration(seconds: 30),
-    //   constraints: Constraints(
-    //     networkType: NetworkType.connected,
-    //   ),
-    // );
-  }
-
-  void _cancelBackgroundTask() {
-    Workmanager().cancelAll();
+  Future<void> _playDestinationChime() async {
+    try {
+      await _chimePlayer.setAsset('assets/sounds/destination_reached.wav');
+      await _chimePlayer.play();
+    } catch (_) {
+      // Don't let a sound failure block the hike flow
+    }
   }
 
   void resetHikeData() => setState(() {
@@ -165,22 +123,6 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
           destinations = parseDestinations(hikeData!["data"]["coordinates"]);
           showUndo = hikeData!["data"]["hasUndoableCompletions"] == true;
         }
-
-        //save lat's and lng's to localStorage, to use in WorkManager
-        final latLngList = destinations.map((dest) {
-          return {
-            'lat': dest.location.latitude,
-            'lng': dest.location.longitude,
-          };
-        }).toList();
-        destsJson = json.encode(latLngList);
-        LocalStorage.saveString("destinations", json.encode(latLngList));
-
-        //nieuwe locaties waarvoor nog geen notificatie is gegeven? Vlaggetje pingStr verwijderen, wordt dan door de background task aangemaakt
-        String toStoreHash = generateMd5(json.encode(latLngList));
-        if (toStoreHash != storedDestHash) {
-          LocalStorage.remove("pingStr");
-        }
       });
     });
     socketConnection.sendJson({'endpoint': 'newLocation'});
@@ -205,13 +147,9 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
   void setupLocationThings() async {
     if (showConfirm || destinations == []) return;
 
-    // before destination reached but hiking
-    _startBackgroundTask();
-
     Destination destination = await destinationReached(destinations);
 
-    // after destination reached
-    _cancelBackgroundTask();
+    _playDestinationChime();
 
     if (destination.confirmByUser) {
       setState(() {
@@ -349,27 +287,19 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
 
   Future<void> _initGpsStatusWatcher() async {
     if (mounted) setState(() => _gpsStatus = GpsStatus.noSignal);
-    
 
-    // Nauwkeurigheidsdrempels kun je tweaken
     const accuracyGoodMeters = 30.0;
     const staleAfter = Duration(seconds: 12);
 
-    const locationSettings = LocationSettings(
-      accuracy: LocationAccuracy.best, // hoge nauwkeurigheid
-      distanceFilter: 0,
-    );
-
     _gpsSub?.cancel();
-    _gpsSub = Geolocator.getPositionStream(locationSettings: locationSettings).listen(
+    _gpsSub = positionStream.listen(
       (Position pos) {
-        // Reset no-signal timer bij elke update
         _gpsStaleTimer?.cancel();
         _gpsStaleTimer = Timer(staleAfter, () {
           if (mounted) setState(() => _gpsStatus = GpsStatus.noSignal);
         });
 
-        final acc = pos.accuracy; // in meters
+        final acc = pos.accuracy;
         final next = acc <= accuracyGoodMeters ? GpsStatus.fix : GpsStatus.acquiring;
         if (mounted) setState(() => _gpsStatus = next);
       },

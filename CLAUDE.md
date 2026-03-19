@@ -15,7 +15,7 @@
 - **Foto zoom**: `photo_view` (al geïnstalleerd)
 - **Audio**: `just_audio`
 - **GPS**: `geolocator`
-- **Achtergrond**: `workmanager`
+- **Achtergrond**: `workmanager` (wordt vervangen door geolocator foreground service)
 
 ## Stap 1 – Verken de codebase (altijd eerst doen)
 ```bash
@@ -32,7 +32,12 @@ Beschrijf je bevindingen beknopt voordat je begint.
 1. ~~**Galerij / bladeren door routetypes**~~ – geïmplementeerd als bundel-functionaliteit.
    `BundleView` widget (`lib/widgets/bundle.dart`) met PageView, status-indicator dots,
    lock/blur voor lineaire modus. `hike.dart` aangepast met `_isBundle` detectie.
-   **Status: code compleet, nog testen en committen.**
+   Gecommit en gepusht: commit 00c4930.
+2. ~~**Geluidje bij destination reached (foreground)**~~ – `just_audio` speelt
+   `assets/sounds/destination_reached.wav` af zodra GPS-radius bereikt is. Werkt in
+   voorgrond. Nog niet gecommit – wordt meegenomen in foreground-service commit.
+   Gewijzigde bestanden: `pubspec.yaml` (assets sectie), `lib/pages/hike.dart`
+   (`_chimePlayer`, `_playDestinationChime()`, aanroep in `setupLocationThings()`).
 
 ## Codebase structuur (geverifieerd)
 ```
@@ -59,13 +64,17 @@ lib/
 
 ## Actieve taken
 
-### [PRIO 2] Geluidje bij destination reached
-**Doel**: korte geluidsfeedback wanneer een deelnemer een checkpoint bereikt.
-- Gebruik `audioplayers` of `just_audio` package (overleg eerst welke al gebruikt wordt)
-- Geluid moet ook afspelen als de app op de achtergrond is
-- Voeg een geluidbestand toe als asset (`assets/sounds/destination_reached.mp3`)
+### [PRIO 1] Foreground service voor achtergrond GPS + geluid ← VOLGENDE TAAK
+**Zie gedetailleerd plan in `../CLAUDE.md` onder "Plan: Foreground service".**
+Samenvatting:
+- Gebruik `geolocator`'s ingebouwde `ForegroundNotificationConfig` (geen extra package)
+- Android permissions toevoegen (FOREGROUND_SERVICE, FOREGROUND_SERVICE_LOCATION, ACCESS_BACKGROUND_LOCATION)
+- `currentLocationStream` omzetten naar `AndroidSettings` met foreground service
+- WorkManager volledig verwijderen (`pubspec.yaml`, `main.dart`, `hike.dart`, `cron_job.dart`)
+- Geluid (`_playDestinationChime()`) werkt automatisch mee doordat de app actief blijft
+- Testen met scherm uit, dan committen + pushen
 
-### [PRIO 3] Competitie zichtbaar tijdens route
+### [PRIO 2] Competitie zichtbaar tijdens route
 **Voorstel voor CC om uit te werken**:
 Stel een concreet voorstel voor op basis van de bestaande architectuur. Mogelijke richtingen:
 - Optie A: Live scorebord – teams gesorteerd op aantal voltooide checkpoints + snelheid

@@ -60,7 +60,18 @@ Destination? checkDestionsReached(List destinations, currentLocation) {
   return null;
 }
 
-const locationSettings = LocationSettings(accuracy: LocationAccuracy.bestForNavigation);
+final _locationSettings = AndroidSettings(
+  accuracy: LocationAccuracy.best,
+  distanceFilter: 0,
+  foregroundNotificationConfig: const ForegroundNotificationConfig(
+    notificationTitle: "TapawingoHike",
+    notificationText: "Route actief",
+    enableWakeLock: true,
+  ),
+);
+
+final Stream<Position> positionStream =
+    Geolocator.getPositionStream(locationSettings: _locationSettings).asBroadcastStream();
 
 Stream currentLocationStream =
-    Geolocator.getPositionStream(locationSettings: locationSettings).map((Position position) => positionToLatLng(position)).asBroadcastStream();
+    positionStream.map((Position position) => positionToLatLng(position));
