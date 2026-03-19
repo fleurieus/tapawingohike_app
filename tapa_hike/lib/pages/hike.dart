@@ -18,6 +18,7 @@ import 'package:workmanager/workmanager.dart';
 
 import 'package:tapa_hike/widgets/loading.dart';
 import 'package:tapa_hike/widgets/routes.dart';
+import 'package:tapa_hike/widgets/bundle.dart';
 import 'package:tapa_hike/widgets/legendrow.dart';
 
 enum GpsStatus { noSignal, acquiring, fix }
@@ -132,19 +133,38 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
         showUndo = false;
       });
 
+  /// Check whether the received data is a bundle response
+  bool get _isBundle => hikeData != null && hikeData!["bundle"] == true;
+
+  /// Extract the current part's coordinates from bundle data
+  List _currentBundleCoordinates() {
+    if (!_isBundle) return [];
+    final parts = hikeData!["parts"] as List;
+    final idx = hikeData!["currentIndex"] as int? ?? 0;
+    if (idx >= parts.length) return [];
+    return parts[idx]["data"]["coordinates"] ?? [];
+  }
+
   void receiveHikeData() async {
     //request new Location
     await _ensureConnectedAndAuthenticated();
 
     //print('receiveHikeData');
     await Future.delayed(const Duration(milliseconds: 700));
-    
+
 
     socketConnection.listenOnce(socketConnection.locationStream).then((event) {
       setState(() {
         hikeData = event;
-        destinations = parseDestinations(hikeData!["data"]["coordinates"]);
-        showUndo = hikeData!["data"]["hasUndoableCompletions"] == true;
+
+        // Parse destinations: from bundle's current part or single part
+        if (hikeData!["bundle"] == true) {
+          destinations = parseDestinations(_currentBundleCoordinates());
+          showUndo = hikeData!["hasUndoableCompletions"] == true;
+        } else {
+          destinations = parseDestinations(hikeData!["data"]["coordinates"]);
+          showUndo = hikeData!["data"]["hasUndoableCompletions"] == true;
+        }
 
         //save lat's and lng's to localStorage, to use in WorkManager
         final latLngList = destinations.map((dest) {
@@ -524,7 +544,12 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
         backgroundColor: scheme.primary,
         foregroundColor: scheme.onPrimary,
       ),
-      body: hikeTypeWidgets[hikeData!["type"]](hikeData!["data"], destinations),
+      body: _isBundle
+          ? BundleView(
+              bundleData: hikeData!,
+              currentDestinations: destinations.cast<Destination>(),
+            )
+          : hikeTypeWidgets[hikeData!["type"]](hikeData!["data"], destinations),
       floatingActionButton: (showConfirm ? confirmButton : null),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
