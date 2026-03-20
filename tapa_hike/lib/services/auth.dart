@@ -1,6 +1,7 @@
 // lib/services/auth.dart
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:tapa_hike/services/socket.dart';
 import 'package:tapa_hike/services/storage.dart';
 
@@ -19,6 +20,12 @@ Future<void> loginAndPermissions(String authStr, BuildContext context) async {
   var permission = await Geolocator.checkPermission();
   if (permission == LocationPermission.denied) {
     permission = await Geolocator.requestPermission();
+  }
+
+  // 3) Notificatie-permissie vragen (Android 13+) voor foreground service
+  final notifPermission = await Permission.notification.status;
+  if (notifPermission.isDenied) {
+    await Permission.notification.request();
   }
 
   // 3) Socket verbinden en aanmelden bij jouw backend

@@ -97,7 +97,8 @@ class _BundleViewState extends State<BundleView> {
       }
 
       // Locked: show blurred content with lock overlay
-      return Stack(
+      return IgnorePointer(
+        child: Stack(
         children: [
           ImageFiltered(
             imageFilter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
@@ -120,6 +121,7 @@ class _BundleViewState extends State<BundleView> {
             ),
           ),
         ],
+      ),
       );
     }
 
@@ -158,9 +160,13 @@ class _BundleViewState extends State<BundleView> {
           controller: _pageController,
           itemCount: totalParts,
           onPageChanged: (index) {
-            setState(() => _currentPage = index);
+            // Clamp to max 1 page per swipe
+            final clamped = index.clamp(_currentPage - 1, _currentPage + 1);
+            if (clamped != index) {
+              _pageController.jumpToPage(clamped);
+            }
+            setState(() => _currentPage = clamped);
           },
-          // In linear mode, physics restricts but we handle via UI
           itemBuilder: (context, index) => _buildPartContent(index),
         ),
 
@@ -172,24 +178,6 @@ class _BundleViewState extends State<BundleView> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Counter text
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Text(
-                  "${_currentPage + 1} / $totalParts",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
               // Dot indicators
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,

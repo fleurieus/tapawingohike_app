@@ -44,6 +44,7 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
   final AudioPlayer _chimePlayer = AudioPlayer();
 
   bool _reconnecting = false;
+  bool _waitingForDestination = false;
 
   GpsStatus _gpsStatus = GpsStatus.noSignal;
   StreamSubscription<Position>? _gpsSub;
@@ -89,6 +90,7 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
         destinations = [];
         showConfirm = false;
         showUndo = false;
+        _waitingForDestination = false;
       });
 
   /// Check whether the received data is a bundle response
@@ -145,10 +147,12 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
   }
 
   void setupLocationThings() async {
-    if (showConfirm || destinations == []) return;
+    if (showConfirm || destinations.isEmpty || _waitingForDestination) return;
+    _waitingForDestination = true;
 
     Destination destination = await destinationReached(destinations);
 
+    _waitingForDestination = false;
     _playDestinationChime();
 
     if (destination.confirmByUser) {

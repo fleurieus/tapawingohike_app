@@ -14,8 +14,8 @@
 - **Lokale opslag**: `shared_preferences`
 - **Foto zoom**: `photo_view` (al geïnstalleerd)
 - **Audio**: `just_audio`
-- **GPS**: `geolocator`
-- **Achtergrond**: `workmanager` (wordt vervangen door geolocator foreground service)
+- **GPS**: `geolocator` met `AndroidSettings` + `ForegroundNotificationConfig` (foreground service)
+- **Scherm aan**: `wakelock_plus`
 
 ## Stap 1 – Verken de codebase (altijd eerst doen)
 ```bash
@@ -33,29 +33,37 @@ Beschrijf je bevindingen beknopt voordat je begint.
    `BundleView` widget (`lib/widgets/bundle.dart`) met PageView, status-indicator dots,
    lock/blur voor lineaire modus. `hike.dart` aangepast met `_isBundle` detectie.
    Gecommit en gepusht: commit 00c4930.
-2. ~~**Geluidje bij destination reached (foreground)**~~ – `just_audio` speelt
+2. ~~**Geluidje bij destination reached**~~ – `just_audio` speelt
    `assets/sounds/destination_reached.wav` af zodra GPS-radius bereikt is. Werkt in
-   voorgrond. Nog niet gecommit – wordt meegenomen in foreground-service commit.
-   Gewijzigde bestanden: `pubspec.yaml` (assets sectie), `lib/pages/hike.dart`
-   (`_chimePlayer`, `_playDestinationChime()`, aanroep in `setupLocationThings()`).
+   voor- en achtergrond dankzij foreground service. Commit 15bd1e3.
+3. ~~**Foreground service voor achtergrond GPS + geluid**~~ – WorkManager volledig vervangen
+   door geolocator `AndroidSettings` met `ForegroundNotificationConfig`. Eén gedeelde
+   `positionStream` (location.dart) voor zowel GPS-status icoon als destination-check.
+   Notificatie-permissie wordt gevraagd bij login (auth.dart). Commit 15bd1e3 + bugfixes.
+4. ~~**Package naam fix**~~ – pubspec.yaml `name` van `TapawingoHike` naar `tapa_hike`
+   zodat imports matchen en de build slaagt. Commit 024a24a.
+5. ~~**Bugfix: meerdere destination-subscriptions**~~ – `destinations == []` (altijd false in
+   Dart) vervangen door `destinations.isEmpty`, plus `_waitingForDestination` guard om
+   dubbele subscriptions op `currentLocationStream` te voorkomen.
+6. ~~**Bundel swipe UX**~~ – "1/3" teller verwijderd (alleen dots), swipe geclampt op max ±1
+   pagina, `IgnorePointer` op geblurde locked-content zodat swipe niet wordt afgevangen.
 
 ## Codebase structuur (geverifieerd)
 ```
 lib/
-├── main.dart                    # Entry point, WorkManager setup
+├── main.dart                    # Entry point (clean, geen WorkManager)
 ├── theme.dart                   # Material 3, brand color #266619
 ├── pages/
 │   ├── home.dart                # Login (teamcode invoer)
 │   └── hike.dart                # Hoofd-hike scherm (route weergave, GPS, confirm)
 ├── services/
 │   ├── socket.dart              # WebSocket (ws://116.203.112.220:80/ws/app/)
-│   ├── location.dart            # Destination model, GPS radius check, parseDestinations()
-│   ├── auth.dart                # Login + permissions helper
-│   ├── storage.dart             # SharedPreferences wrapper
-│   └── cron_job.dart            # Ongebruikt
+│   ├── location.dart            # Destination model, positionStream, currentLocationStream
+│   ├── auth.dart                # Login + locatie/notificatie permissions helper
+│   └── storage.dart             # SharedPreferences wrapper
 └── widgets/
     ├── routes.dart              # Route type dispatcher (coordinate/image/audio)
-    ├── bundle.dart              # BundleView (NIEUW) – PageView met swipe, dots, lock/blur
+    ├── bundle.dart              # BundleView – PageView met swipe, dots, lock/blur
     ├── map.dart                 # flutter_map component
     ├── audio.dart               # just_audio player widget
     ├── loading.dart             # Spinner
@@ -64,17 +72,7 @@ lib/
 
 ## Actieve taken
 
-### [PRIO 1] Foreground service voor achtergrond GPS + geluid ← VOLGENDE TAAK
-**Zie gedetailleerd plan in `../CLAUDE.md` onder "Plan: Foreground service".**
-Samenvatting:
-- Gebruik `geolocator`'s ingebouwde `ForegroundNotificationConfig` (geen extra package)
-- Android permissions toevoegen (FOREGROUND_SERVICE, FOREGROUND_SERVICE_LOCATION, ACCESS_BACKGROUND_LOCATION)
-- `currentLocationStream` omzetten naar `AndroidSettings` met foreground service
-- WorkManager volledig verwijderen (`pubspec.yaml`, `main.dart`, `hike.dart`, `cron_job.dart`)
-- Geluid (`_playDestinationChime()`) werkt automatisch mee doordat de app actief blijft
-- Testen met scherm uit, dan committen + pushen
-
-### [PRIO 2] Competitie zichtbaar tijdens route
+### [PRIO 1] Competitie zichtbaar tijdens route
 **Voorstel voor CC om uit te werken**:
 Stel een concreet voorstel voor op basis van de bestaande architectuur. Mogelijke richtingen:
 - Optie A: Live scorebord – teams gesorteerd op aantal voltooide checkpoints + snelheid
@@ -82,28 +80,32 @@ Stel een concreet voorstel voor op basis van de bestaande architectuur. Mogelijk
 - Optie C: Combinatie – compact scorebord-icoontje + optionele kaartlaag
 Geef aan welke server-aanpassingen elk optie vereist.
 
-### [PRIO 4] Berichten sturen/ontvangen
+### [PRIO 2] Berichten sturen/ontvangen
 - Verifieer of de server al een messaging endpoint heeft
 - Chat-achtig scherm per editie of globaal?
 - Push notifications gewenst? (vereist FCM integratie – vraag aan gebruiker)
 
-### [PRIO 5] Locatie delen
-**Doel**: periodiek of op verzoek van de server de GPS-locatie van het team uploaden.
-- Achtergrond locatie vereist `background_locator` of `geolocator` met background mode
+### [PRIO 3] Locatie delen
+**Doel**: periodiek de GPS-locatie van het team uploaden naar de server.
+- Foreground service draait al → `positionStream` is beschikbaar
 - Vraag aan gebruiker: hoe frequent uploaden? (bijv. elke 30 sec, of alleen op verzoek?)
-- Verifieer bestaand locatie-mechanisme in de code
+- Server heeft al `updateLocation` endpoint
 
-### [PRIO 6] Route datum + locatielogs filteren
+### [PRIO 4] Route datum + locatielogs filteren
 - Voeg `date` veld toe aan het route/editie model (verifieer of dit al bestaat)
 - Locatielogs filteren op datum in de beheerapplicatie (server-kant) en/of app
 
-### [PRIO 7] GPS fix feedback
-- Toon de huidige GPS-nauwkeurigheid visueel (bijv. icoontje met kleur: rood/oranje/groen)
-- Gebruik `geolocator` accuracy veld
-
-### [PRIO 8] Help menu
+### [PRIO 5] Help menu
 - Statische of dynamische helpteksten per scherm
 - Verifieer of er al een settings/about scherm is om op te hangen
+
+## GPS architectuur (referentie)
+- `location.dart` definieert `positionStream` (broadcast `Stream<Position>`) met
+  `AndroidSettings` + `ForegroundNotificationConfig` — dit is de **enige** GPS stream
+- `currentLocationStream` mapt `positionStream` naar `LatLng` voor destination-checks
+- `hike.dart` `_initGpsStatusWatcher()` luistert naar `positionStream` voor accuracy/icon
+- `hike.dart` `destinationReached()` luistert naar `currentLocationStream` voor radius-check
+- `auth.dart` vraagt locatie- én notificatie-permissie bij login
 
 ## Flutter conventies (geverifieerd)
 - Mapstructuur: `lib/pages/`, `lib/widgets/`, `lib/services/` (geen apart models-bestand)
@@ -122,11 +124,14 @@ flutter analyze
 dart fix --apply
 ```
 
+## Lokaal testen via USB
+```bash
+adb reverse tcp:8000 tcp:8000
+# Wijzig socket.dart: domain = "127.0.0.1:8000"
+# Vergeet niet terug te zetten naar productie-URL voor commit!
+```
+
 ## Belangrijk: API-contract
 De app communiceert met de Django server via **WebSocket** (niet REST). **Pas nooit de verwachte
 message structuur aan** zonder ook de server aan te passen én dit te vermelden aan de gebruiker.
 Documenteer API-wijzigingen in `../CLAUDE.md` onder "Bundel-functionaliteit".
-
-## Bekende issue: package naam mismatch
-pubspec.yaml heeft `name: TapawingoHike` maar alle imports gebruiken `package:tapa_hike/...`.
-`flutter analyze` toont veel false-positive errors hierdoor. De app compileert en draait wel correct.
