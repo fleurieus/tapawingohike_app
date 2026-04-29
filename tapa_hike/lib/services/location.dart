@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 
@@ -60,15 +61,24 @@ Destination? checkDestionsReached(List destinations, currentLocation) {
   return null;
 }
 
-final _locationSettings = AndroidSettings(
-  accuracy: LocationAccuracy.best,
-  distanceFilter: 0,
-  foregroundNotificationConfig: const ForegroundNotificationConfig(
-    notificationTitle: "TapawingoHike",
-    notificationText: "Route actief",
-    enableWakeLock: true,
-  ),
-);
+final LocationSettings _locationSettings = Platform.isAndroid
+    ? AndroidSettings(
+        accuracy: LocationAccuracy.best,
+        distanceFilter: 0,
+        foregroundNotificationConfig: const ForegroundNotificationConfig(
+          notificationTitle: "TapawingoHike",
+          notificationText: "Route actief – locatie in gebruik",
+          enableWakeLock: true,
+        ),
+      )
+    : AppleSettings(
+        accuracy: LocationAccuracy.best,
+        activityType: ActivityType.fitness,
+        distanceFilter: 0,
+        pauseLocationUpdatesAutomatically: false,
+        showBackgroundLocationIndicator: true,
+        allowBackgroundLocationUpdates: true,
+      );
 
 final Stream<Position> positionStream =
     Geolocator.getPositionStream(locationSettings: _locationSettings).asBroadcastStream();

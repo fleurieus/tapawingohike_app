@@ -45,5 +45,20 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>TapawingoHike gebruikt je locatie om automatisch te detecteren wanneer je een routepunt bereikt en om je positie tijdens een actieve hike te delen met de organisatie van het evenement.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>TapawingoHike volgt je locatie ook op de achtergrond tijdens een actieve hike, zodat checkpoints automatisch herkend worden en de organisatie de teams op een live kaart kan begeleiden.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>TapawingoHike volgt je locatie ook op de achtergrond tijdens een actieve hike, zodat checkpoints automatisch herkend worden en de organisatie de teams op een live kaart kan begeleiden.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>TapawingoHike gebruikt je camera om foto's te kunnen meesturen in berichten naar de organisatie.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>TapawingoHike gebruikt je foto-galerij om foto's te kunnen meesturen in berichten naar de organisatie.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>audio</string>
+	</array>
 </dict>
 </plist>

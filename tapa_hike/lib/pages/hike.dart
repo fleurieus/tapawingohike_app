@@ -11,7 +11,9 @@ import 'package:tapa_hike/services/auth.dart';
 import 'package:tapa_hike/services/socket.dart';
 import 'package:tapa_hike/services/location.dart';
 import 'package:tapa_hike/services/storage.dart';
+import 'package:tapa_hike/services/location_sender.dart';
 
+import 'package:tapa_hike/pages/messages.dart';
 import 'package:tapa_hike/widgets/loading.dart';
 import 'package:tapa_hike/widgets/routes.dart';
 import 'package:tapa_hike/widgets/bundle.dart';
@@ -42,6 +44,7 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
   late LatLng lastLocation;
 
   final AudioPlayer _chimePlayer = AudioPlayer();
+  final AudioPlayer _messageChimePlayer = AudioPlayer();
 
   bool _reconnecting = false;
   bool _waitingForDestination = false;
@@ -50,12 +53,16 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
   StreamSubscription<Position>? _gpsSub;
   Timer? _gpsStaleTimer;
 
+  int _unreadMessages = 0;
+  StreamSubscription? _messageSub;
+
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _initGpsStatusWatcher();
+    _initMessageListener();
   }
 
   @override
@@ -63,7 +70,9 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _gpsSub?.cancel();
     _gpsStaleTimer?.cancel();
+    _messageSub?.cancel();
     _chimePlayer.dispose();
+    _messageChimePlayer.dispose();
     super.dispose();
   }
 
@@ -204,6 +213,7 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
   }
 
   logout() async {
+    LocationSender.instance.stop();
     await LocalStorage.remove("authStr");
     SocketConnection.closeAndReconnect();
 
@@ -315,6 +325,45 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
 
 
 
+  void _initMessageListener() {
+    if (!socketConnection.messagingEnabled) return;
+    _messageSub = socketConnection.messageStream.listen((event) {
+      // Only handle single incoming messages here (not history lists)
+      // Skip echoes of our own sent messages
+      if (event is Map && event["isOrganisation"] == true) {
+        if (mounted) {
+          setState(() => _unreadMessages++);
+          _playMessageChime();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${event["from"]}: ${event["text"]}'),
+              duration: const Duration(seconds: 3),
+              action: SnackBarAction(
+                label: 'Bekijk',
+                onPressed: _openMessages,
+              ),
+            ),
+          );
+        }
+      }
+    });
+  }
+
+  Future<void> _playMessageChime() async {
+    try {
+      await _messageChimePlayer.setAsset('assets/sounds/destination_reached.wav');
+      await _messageChimePlayer.play();
+    } catch (_) {}
+  }
+
+  void _openMessages() {
+    setState(() => _unreadMessages = 0);
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const MessagesPage()),
+    );
+  }
+
   void _showGpsLegend() {
     showDialog(
       context: context,
@@ -389,6 +438,18 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
           child: Text("TapawingoHike"),
         ),
         actions: <Widget>[
+          // Messages icon with unread badge
+          if (socketConnection.messagingEnabled)
+            IconButton(
+              tooltip: 'Berichten',
+              onPressed: _openMessages,
+              icon: Badge(
+                isLabelVisible: _unreadMessages > 0,
+                label: Text('$_unreadMessages'),
+                child: const Icon(Icons.chat_bubble_outline),
+              ),
+            ),
+
           if (showUndo)
             IconButton(
               tooltip: 'Ongedaan maken',
