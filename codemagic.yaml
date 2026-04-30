@@ -8,7 +8,9 @@
 workflows:
   android-workflow:
     name: Android Release Build
-    instance_type: linux_x2
+    # Mac mini M2 is the only instance available on the free Codemagic
+    # tier; it can build Android too.
+    instance_type: mac_mini_m2
     max_build_duration: 60
     working_directory: tapa_hike
     environment:
