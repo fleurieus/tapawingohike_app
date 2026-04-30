@@ -1,0 +1,62 @@
+# Codemagic CI/CD configuration for the TapawingoHike Flutter app.
+#
+# Two workflows: one for Android (.aab for Play Store), one for iOS
+# (.ipa for App Store / TestFlight). Both produce unsigned builds for
+# now — code signing is added once Apple Developer and Play signing
+# secrets are configured in the Codemagic environment.
+
+workflows:
+  android-workflow:
+    name: Android Release Build
+    instance_type: linux_x2
+    max_build_duration: 60
+    working_directory: tapa_hike
+    environment:
+      flutter: stable
+      groups:
+        # Add later for signing:
+        # - keystore_credentials   (CM_KEYSTORE, CM_KEYSTORE_PASSWORD,
+        #                           CM_KEY_ALIAS, CM_KEY_PASSWORD)
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Flutter analyze
+        script: flutter analyze
+        ignore_failure: true
+      - name: Build Android App Bundle
+        script: flutter build appbundle --release
+    artifacts:
+      - build/**/outputs/**/*.aab
+      - build/**/outputs/**/mapping.txt
+      - flutter_drive.log
+
+  ios-workflow:
+    name: iOS Release Build
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    working_directory: tapa_hike
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      groups:
+        # Add later for signing + TestFlight upload:
+        # - app_store_credentials  (APP_STORE_CONNECT_KEY_IDENTIFIER,
+        #                           APP_STORE_CONNECT_ISSUER_ID,
+        #                           APP_STORE_CONNECT_PRIVATE_KEY)
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Install CocoaPods
+        script: |
+          cd ios
+          pod install
+      - name: Flutter analyze
+        script: flutter analyze
+        ignore_failure: true
+      - name: Build unsigned iOS archive
+        script: flutter build ipa --release --no-codesign
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - flutter_drive.log
