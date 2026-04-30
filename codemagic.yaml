@@ -13,10 +13,9 @@ workflows:
     working_directory: tapa_hike
     environment:
       flutter: stable
-      groups:
-        # Add later for signing:
-        # - keystore_credentials   (CM_KEYSTORE, CM_KEYSTORE_PASSWORD,
-        #                           CM_KEY_ALIAS, CM_KEY_PASSWORD)
+      # When ready to sign, add a `groups:` block here referencing a
+      # Codemagic environment group (e.g. `keystore_credentials`) that
+      # exposes CM_KEYSTORE, CM_KEYSTORE_PASSWORD, CM_KEY_ALIAS, CM_KEY_PASSWORD.
     scripts:
       - name: Get Flutter packages
         script: flutter pub get
@@ -39,11 +38,10 @@ workflows:
       flutter: stable
       xcode: latest
       cocoapods: default
-      groups:
-        # Add later for signing + TestFlight upload:
-        # - app_store_credentials  (APP_STORE_CONNECT_KEY_IDENTIFIER,
-        #                           APP_STORE_CONNECT_ISSUER_ID,
-        #                           APP_STORE_CONNECT_PRIVATE_KEY)
+      # When ready to sign + upload to TestFlight, add a `groups:` block
+      # referencing a Codemagic environment group (e.g. `app_store_credentials`)
+      # that exposes APP_STORE_CONNECT_KEY_IDENTIFIER,
+      # APP_STORE_CONNECT_ISSUER_ID, APP_STORE_CONNECT_PRIVATE_KEY.
     scripts:
       - name: Get Flutter packages
         script: flutter pub get
