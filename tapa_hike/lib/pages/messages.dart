@@ -329,7 +329,7 @@ class _MessageBubble extends StatelessWidget {
       if (imageUrl.startsWith("http")) {
         fullImageUrl = imageUrl;
       } else {
-        fullImageUrl = "http://$domain$imageUrl";
+        fullImageUrl = "$httpScheme://$domain$imageUrl";
       }
     }
 
