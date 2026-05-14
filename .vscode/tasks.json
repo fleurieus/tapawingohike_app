@@ -1,0 +1,50 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Flutter: Build APK (debug)",
+      "type": "shell",
+      "command": "flutter build apk --debug",
+      "options": {
+        "cwd": "${workspaceFolder}/tapa_hike"
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Flutter: Build APK (release)",
+      "type": "shell",
+      "command": "flutter build apk --release",
+      "options": {
+        "cwd": "${workspaceFolder}/tapa_hike"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Flutter: Build APK (split per ABI)",
+      "type": "shell",
+      "command": "flutter build apk --release --split-per-abi",
+      "options": {
+        "cwd": "${workspaceFolder}/tapa_hike"
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    }
+  ]
+}
