@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:web_socket_client/web_socket_client.dart';
 
 import 'package:tapa_hike/services/location_sender.dart';
@@ -68,9 +69,12 @@ class SocketConnection {
 
     mainStream.listen((event) {
       final type = event["type"];
+      debugPrint('[Socket] <<< received type: $type');
       final controller = channelMapping[type];
       if (controller != null) {
         controller.add(event["data"]);
+      } else {
+        debugPrint('[Socket] <<< no handler registered for type: $type');
       }
     });
   }
@@ -83,7 +87,21 @@ class SocketConnection {
     return authResult;
   }
 
+  /// Wait until the socket is in a [Connected] or [Reconnected] state.
+  /// Throws a [TimeoutException] if [timeout] elapses before connecting.
+  Future<void> waitUntilConnected({Duration timeout = const Duration(seconds: 10)}) {
+    final current = socket.connection.state;
+    if (current is Connected || current is Reconnected) {
+      return Future.value();
+    }
+    debugPrint('[Socket] waitUntilConnected: not connected (state: $current), waiting...');
+    return socket.connection
+        .firstWhere((s) => s is Connected || s is Reconnected)
+        .timeout(timeout);
+  }
+
   void sendJson(data) {
+    debugPrint('[Socket] >>> sending endpoint: ${data["endpoint"] ?? data}');
     socket.send(json.encode(data));
   }
 
@@ -172,6 +190,8 @@ class SocketConnection {
   }
 
   void reconnect() {
+    debugPrint('[Socket] reconnect() called — resetting authResult');
+    authResult = false;
     socket.close();
     _initConnection();
   }

@@ -120,10 +120,12 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
 
   void receiveHikeData() async {
     if (_loadingHikeData) return;
+    debugPrint('[HikePage] receiveHikeData: starting');
     setState(() => _loadingHikeData = true);
 
     try {
       await _ensureConnectedAndAuthenticated();
+      debugPrint('[HikePage] receiveHikeData: waiting 700ms before newLocation');
       await Future.delayed(const Duration(milliseconds: 700));
 
       // Set up the listener BEFORE sending the request so no message is missed.
@@ -131,9 +133,12 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
         socketConnection.locationStream,
         timeout: const Duration(seconds: 15),
       );
+      debugPrint('[HikePage] receiveHikeData: sending newLocation');
       socketConnection.sendJson({'endpoint': 'newLocation'});
+      debugPrint('[HikePage] receiveHikeData: waiting for route response (15s timeout)');
 
       final event = await future;
+      debugPrint('[HikePage] receiveHikeData: route response received');
       if (!mounted) return;
 
       setState(() {
@@ -149,7 +154,9 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
           showUndo = hikeData!["data"]["hasUndoableCompletions"] == true;
         }
       });
+      debugPrint('[HikePage] receiveHikeData: state updated, destinations: ${destinations.length}');
     } catch (e) {
+      debugPrint('[HikePage] receiveHikeData: ERROR: $e');
       if (mounted) {
         setState(() => _loadingHikeData = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -244,17 +251,22 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
   }
 
   Future<void> _ensureConnectedAndAuthenticated() async {
-    // 1) Wacht tot de socket echt verbonden is
+    // 1) Wacht tot de socket echt in Connected/Reconnected staat is
+    debugPrint('[HikePage] _ensureConnectedAndAuthenticated: checking live socket state');
     try {
-      await socketConnection.onConnected.timeout(const Duration(seconds: 5));
+      await socketConnection.waitUntilConnected(timeout: const Duration(seconds: 10));
+      debugPrint('[HikePage] _ensureConnectedAndAuthenticated: socket is connected');
     } catch (_) {
       // fallback: forceer reconnect en wacht opnieuw
+      debugPrint('[HikePage] _ensureConnectedAndAuthenticated: not connected, forcing reconnect');
       socketConnection.reconnect();
-      await socketConnection.onConnected.timeout(const Duration(seconds: 5));
+      await socketConnection.waitUntilConnected(timeout: const Duration(seconds: 10));
+      debugPrint('[HikePage] _ensureConnectedAndAuthenticated: reconnected');
     }
 
     // 2) Check of we al geauthenticeerd zijn; zo niet, doe dat met de opgeslagen authStr
     if (!socketConnection.isAuthenticated()) {
+      debugPrint('[HikePage] _ensureConnectedAndAuthenticated: not authenticated, re-authenticating');
       final authStr = await LocalStorage.getString("authStr");
       if (authStr == null || authStr.trim().isEmpty) {
         throw Exception('Geen opgeslagen teamcode gevonden');
@@ -265,6 +277,9 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
       if (!ok) {
         throw Exception('Authenticatie mislukt');
       }
+      debugPrint('[HikePage] _ensureConnectedAndAuthenticated: authenticated successfully');
+    } else {
+      debugPrint('[HikePage] _ensureConnectedAndAuthenticated: already authenticated');
     }
   }
 
@@ -430,13 +445,17 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
     FloatingActionButton confirmButton = FloatingActionButton.extended(
       onPressed: !_isConfirming
           ? () async {
+              debugPrint('[HikePage] Volgende pressed, reachedLocationId=$reachedLocationId');
               setState(() => _isConfirming = true);
               try {
                 // Ensure the socket is connected before sending so the
                 // confirmation is never silently dropped into a reconnecting socket.
                 await _ensureConnectedAndAuthenticated();
+                debugPrint('[HikePage] Volgende: sending destinationConfirmed');
                 socketConnection.sendJson(locationConfirmdData(reachedLocationId));
+                debugPrint('[HikePage] Volgende: confirmation sent successfully');
               } catch (e) {
+                debugPrint('[HikePage] Volgende: ERROR sending confirmation: $e');
                 if (mounted) {
                   setState(() => _isConfirming = false);
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -445,6 +464,7 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
                 }
                 return;
               }
+              debugPrint('[HikePage] Volgende: resetting hike data, loading next location');
               if (mounted) resetHikeData();
             }
           : null,
