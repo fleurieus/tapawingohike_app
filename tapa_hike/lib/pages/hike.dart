@@ -48,6 +48,8 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
 
   bool _reconnecting = false;
   bool _waitingForDestination = false;
+  bool _loadingHikeData = false;
+  bool _isConfirming = false;
 
   GpsStatus _gpsStatus = GpsStatus.noSignal;
   StreamSubscription<Position>? _gpsSub;
@@ -100,6 +102,8 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
         showConfirm = false;
         showUndo = false;
         _waitingForDestination = false;
+        _loadingHikeData = false;
+        _isConfirming = false;
       });
 
   /// Check whether the received data is a bundle response
@@ -115,16 +119,26 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
   }
 
   void receiveHikeData() async {
-    //request new Location
-    await _ensureConnectedAndAuthenticated();
+    if (_loadingHikeData) return;
+    setState(() => _loadingHikeData = true);
 
-    //print('receiveHikeData');
-    await Future.delayed(const Duration(milliseconds: 700));
+    try {
+      await _ensureConnectedAndAuthenticated();
+      await Future.delayed(const Duration(milliseconds: 700));
 
+      // Set up the listener BEFORE sending the request so no message is missed.
+      final future = socketConnection.listenOnce(
+        socketConnection.locationStream,
+        timeout: const Duration(seconds: 15),
+      );
+      socketConnection.sendJson({'endpoint': 'newLocation'});
 
-    socketConnection.listenOnce(socketConnection.locationStream).then((event) {
+      final event = await future;
+      if (!mounted) return;
+
       setState(() {
         hikeData = event;
+        _loadingHikeData = false;
 
         // Parse destinations: from bundle's current part or single part
         if (hikeData!["bundle"] == true) {
@@ -135,8 +149,14 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
           showUndo = hikeData!["data"]["hasUndoableCompletions"] == true;
         }
       });
-    });
-    socketConnection.sendJson({'endpoint': 'newLocation'});
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingHikeData = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Fout bij ophalen locatie, probeer opnieuw: $e')),
+        );
+      }
+    }
   }
 
   Future destinationReached(destinations) {
@@ -396,9 +416,9 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    // if not hike data: recieve
+    // if not hike data: receive
     if (hikeData == null) {
-      receiveHikeData();
+      if (!_loadingHikeData) receiveHikeData();
       return loadingWidget();
     }
 
@@ -407,26 +427,31 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
     final scheme = Theme.of(context).colorScheme;
 
     //Confirm button
-    bool isConfirming = false; // Track whether confirmation is in progress
     FloatingActionButton confirmButton = FloatingActionButton.extended(
-      onPressed: !isConfirming
+      onPressed: !_isConfirming
           ? () async {
-              setState(() {
-                isConfirming = true;
-              });
-
-              socketConnection.sendJson(locationConfirmdData(reachedLocationId));
-              //hier willen we eigenlijk een bevestiging terug en dan pas de state wijzigen
-              setState(() {
-                isConfirming = false;
-                resetHikeData();
-              });
+              setState(() => _isConfirming = true);
+              try {
+                // Ensure the socket is connected before sending so the
+                // confirmation is never silently dropped into a reconnecting socket.
+                await _ensureConnectedAndAuthenticated();
+                socketConnection.sendJson(locationConfirmdData(reachedLocationId));
+              } catch (e) {
+                if (mounted) {
+                  setState(() => _isConfirming = false);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Kon bevestiging niet versturen, probeer opnieuw: $e')),
+                  );
+                }
+                return;
+              }
+              if (mounted) resetHikeData();
             }
           : null,
       label: const Text('Volgende'),
       icon: const Icon(Icons.thumb_up),
-      backgroundColor: isConfirming ? scheme.surfaceContainerHighest : scheme.primary,
-      foregroundColor: isConfirming ? scheme.onSurface : scheme.onPrimary,
+      backgroundColor: _isConfirming ? scheme.surfaceContainerHighest : scheme.primary,
+      foregroundColor: _isConfirming ? scheme.onSurface : scheme.onPrimary,
     );
         
         
