@@ -90,6 +90,13 @@ Widget audio (data, destinations) {
         child: widgetImage(data),
       ),
     );
+  } else if (data["fullscreen"] == false) {
+    widgets.add(
+      Expanded(
+        flex: 5,
+        child: widgetCoordinate(data, destinations),
+      ),
+    );
   }
   return Column(children: widgets);
 }
