@@ -15,7 +15,7 @@ Map locationConfirmdData(id) => {
 
 List parseDestinations(List coordinates) {
   return coordinates
-      .map((c) => Destination(c["id"], c["latitude"], c["longitude"], c["radius"], c["type"], c["confirmByUser"], c["hideForUser"]))
+      .map((c) => Destination(c["id"], c["latitude"], c["longitude"], c["radius"], c["type"], c["confirmByUser"], c["hideForUser"], c["skipLocationCheck"] ?? false))
       .toList();
 }
 
@@ -27,10 +27,13 @@ class Destination {
   final bool confirmByUser;
   late final LatLng location;
   final bool hideForUser;
+  // Server-flagged: bypass the GPS-radius wait — treat as reached immediately
+  // after the previous routepart. Combined with confirmByUser in hike.dart.
+  final bool skipLocationCheck;
 
   final Map colorMapping = {"mandatory": Colors.red, "choice": Colors.orange, "bonus": Colors.green, "hidden": Colors.black};
 
-  Destination(this.id, latitude, longitude, this.radius, this.type, this.confirmByUser, this.hideForUser) {
+  Destination(this.id, latitude, longitude, this.radius, this.type, this.confirmByUser, this.hideForUser, [this.skipLocationCheck = false]) {
     location = LatLng(latitude, longitude);
     type = hideForUser ? "hidden" : type;
     size = hideForUser ? 0 : 20;

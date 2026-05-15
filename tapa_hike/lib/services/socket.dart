@@ -1,11 +1,19 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:web_socket_client/web_socket_client.dart';
 
 import 'package:tapa_hike/services/location_sender.dart';
 
-const String domain = "app.tapawingo.nl"; //"127.0.0.1:8000"; //"116.203.112.220:80"; // "127.0.0.1:8000";
+// Server hostname:port. Production is the default; override per-run with
+//   flutter run --dart-define=WS_DOMAIN=10.0.2.2:8000      (Android emulator)
+//   flutter run --dart-define=WS_DOMAIN=127.0.0.1:8000     (iOS sim / host)
+// _isLocalDomain below detects the local hosts and switches to plain ws/http.
+const String domain = String.fromEnvironment(
+  "WS_DOMAIN",
+  defaultValue: "app.tapawingo.nl",
+);
 
 // Use TLS for any non-localhost host. Required by iOS App Transport Security
 // and Android's network security config for production traffic.
@@ -39,7 +47,22 @@ class SocketConnection {
   final Completer<void> _connectionCompleter = Completer<void>();
   StreamSubscription? _configSubscription;
 
+  /// Fires once on the very first successful connection and stays completed
+  /// forever after. DO NOT use this to gate a send/auth after a reconnect —
+  /// use [waitUntilConnected] which reflects the live socket state.
   Future<void> get onConnected => _connectionCompleter.future;
+
+  /// Wait until the underlying socket is actually in a Connected/Reconnected
+  /// state. Unlike [onConnected] this checks the live connection.state stream
+  /// every time, so it's safe to call after a reconnect or screen-resume.
+  Future<void> waitUntilConnected({Duration timeout = const Duration(seconds: 5)}) async {
+    final current = socket.connection.state;
+    if (current is Connected || current is Reconnected) return;
+
+    await socket.connection
+        .firstWhere((state) => state is Connected || state is Reconnected)
+        .timeout(timeout);
+  }
 
   void _initConnection() async {
     final uri = Uri.parse('$wsScheme://$domain/ws/app/');
@@ -69,9 +92,12 @@ class SocketConnection {
     mainStream.listen((event) {
       final type = event["type"];
       final controller = channelMapping[type];
-      if (controller != null) {
-        controller.add(event["data"]);
+      if (controller == null) {
+        debugPrint('[socket] unrouted message type=$type');
+        return;
       }
+      debugPrint('[socket] message type=$type');
+      controller.add(event["data"]);
     });
   }
 
@@ -84,6 +110,9 @@ class SocketConnection {
   }
 
   void sendJson(data) {
+    final state = socket.connection.state;
+    final endpoint = (data is Map) ? data['endpoint'] : '?';
+    debugPrint('[socket] sendJson endpoint=$endpoint state=$state authResult=$authResult');
     socket.send(json.encode(data));
   }
 
@@ -172,6 +201,10 @@ class SocketConnection {
   }
 
   void reconnect() {
+    debugPrint('[socket] reconnect() — dropping current socket');
+    // The server drops the session as soon as the WebSocket closes, so any
+    // cached auth on this client is stale. Force re-auth on the next request.
+    authResult = false;
     socket.close();
     _initConnection();
   }

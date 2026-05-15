@@ -1,0 +1,22 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "tapa_hike (productie)",
+      "request": "launch",
+      "type": "dart"
+    },
+    {
+      "name": "tapa_hike (lokaal — Android emulator → host)",
+      "request": "launch",
+      "type": "dart",
+      "toolArgs": ["--dart-define=WS_DOMAIN=10.0.2.2:8000"]
+    },
+    {
+      "name": "tapa_hike (lokaal — iOS sim / desktop)",
+      "request": "launch",
+      "type": "dart",
+      "toolArgs": ["--dart-define=WS_DOMAIN=127.0.0.1:8000"]
+    }
+  ]
+}

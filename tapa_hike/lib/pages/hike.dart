@@ -5,16 +5,15 @@ import 'package:latlong2/latlong.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:web_socket_client/web_socket_client.dart';
 
 import 'package:tapa_hike/pages/home.dart';
-import 'package:tapa_hike/services/auth.dart';
 import 'package:tapa_hike/services/socket.dart';
 import 'package:tapa_hike/services/location.dart';
 import 'package:tapa_hike/services/storage.dart';
 import 'package:tapa_hike/services/location_sender.dart';
 
 import 'package:tapa_hike/pages/messages.dart';
-import 'package:tapa_hike/widgets/loading.dart';
 import 'package:tapa_hike/widgets/routes.dart';
 import 'package:tapa_hike/widgets/bundle.dart';
 import 'package:tapa_hike/widgets/legendrow.dart';
@@ -41,6 +40,7 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
   bool showConfirm = false;
   bool keepScreenOn = false;
   bool showUndo = false;
+  bool _hikeFinished = false; // server stuurde data:null → alle routedelen klaar
   late LatLng lastLocation;
 
   final AudioPlayer _chimePlayer = AudioPlayer();
@@ -48,6 +48,8 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
 
   bool _reconnecting = false;
   bool _waitingForDestination = false;
+  bool _fetchingHikeData = false;
+  bool _isConfirming = false;
 
   GpsStatus _gpsStatus = GpsStatus.noSignal;
   StreamSubscription<Position>? _gpsSub;
@@ -63,6 +65,7 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _initGpsStatusWatcher();
     _initMessageListener();
+    receiveHikeData();
   }
 
   @override
@@ -78,10 +81,20 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      //reconnect
-      socketConnection.reconnect();
+    if (state != AppLifecycleState.resumed) return;
+
+    // Only force a reconnect when the socket is actually disconnected.
+    // The web_socket_client package already auto-reconnects with backoff,
+    // and a healthy live socket should be left alone — calling reconnect()
+    // on it kills the session and forces a re-auth window during which
+    // sends can silently drop.
+    final state2 = socketConnection.socket.connection.state;
+    if (state2 is Connected || state2 is Reconnected) {
+      debugPrint('[hike] resumed, socket already $state2');
+      return;
     }
+    debugPrint('[hike] resumed, socket state=$state2 → reconnect()');
+    socketConnection.reconnect();
   }
 
   Future<void> _playDestinationChime() async {
@@ -93,14 +106,18 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
     }
   }
 
-  void resetHikeData() => setState(() {
-        hikeData = null;
-        reachedLocationId = null;
-        destinations = [];
-        showConfirm = false;
-        showUndo = false;
-        _waitingForDestination = false;
-      });
+  void resetHikeData() {
+    setState(() {
+      hikeData = null;
+      reachedLocationId = null;
+      destinations = [];
+      showConfirm = false;
+      showUndo = false;
+      _waitingForDestination = false;
+      _hikeFinished = false;
+    });
+    receiveHikeData();
+  }
 
   /// Check whether the received data is a bundle response
   bool get _isBundle => hikeData != null && hikeData!["bundle"] == true;
@@ -114,29 +131,119 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
     return parts[idx]["data"]["coordinates"] ?? [];
   }
 
-  void receiveHikeData() async {
-    //request new Location
-    await _ensureConnectedAndAuthenticated();
+  /// Route-type of the part currently shown (bundle-aware). Used to make the
+  /// continue-button label unambiguous for galleries ("Door met de route"
+  /// instead of "Volgende", which reads as "next photo").
+  String? _currentPartType() {
+    if (hikeData == null) return null;
+    if (_isBundle) {
+      final parts = hikeData!["parts"] as List?;
+      final idx = hikeData!["currentIndex"] as int? ?? 0;
+      if (parts == null || idx < 0 || idx >= parts.length) return null;
+      return parts[idx]["type"] as String?;
+    }
+    return hikeData!["type"] as String?;
+  }
 
-    //print('receiveHikeData');
-    await Future.delayed(const Duration(milliseconds: 700));
+  /// First destination flagged `skipLocationCheck` by the server, if any.
+  /// Such a destination bypasses the GPS-radius wait: it counts as reached
+  /// immediately after the previous routepart. For bundles, `destinations`
+  /// already holds only the current part's destinations.
+  Destination? _skipCheckDestination() {
+    for (final d in destinations) {
+      if (d is Destination && d.skipLocationCheck) return d;
+    }
+    return null;
+  }
 
+  Future<void> receiveHikeData() async {
+    if (_fetchingHikeData) return;
+    _fetchingHikeData = true;
 
-    socketConnection.listenOnce(socketConnection.locationStream).then((event) {
+    try {
+      await _ensureConnectedAndAuthenticated();
+
+      // Listener BEFORE send: avoid a race where the response arrives before
+      // we subscribe. listenOnce times out so a missed response surfaces
+      // instead of hanging on the loading spinner forever.
+      final responseFuture = socketConnection.listenOnce(
+        socketConnection.locationStream,
+        timeout: const Duration(seconds: 10),
+      );
+      socketConnection.sendJson({'endpoint': 'newLocation'});
+
+      final event = await responseFuture;
+      if (!mounted) return;
+
+      // Server stuurt {"type":"route","data":null} als er geen openstaand
+      // routedeel meer is → de tocht is afgerond. Vang dit af vóór de
+      // hikeData!-deref hieronder (die anders crasht en de spinner laat
+      // hangen). Bestaand WS-contract, geen API-wijziging.
+      if (event == null) {
+        debugPrint('[hike] newLocation → null, hike finished');
+        setState(() {
+          _hikeFinished = true;
+          hikeData = null;
+          destinations = [];
+          showConfirm = false;
+          showUndo = false;
+          _waitingForDestination = false;
+        });
+        return; // finally zet _fetchingHikeData weer op false
+      }
+
+      Destination? skipDest;
       setState(() {
         hikeData = event;
-
-        // Parse destinations: from bundle's current part or single part
         if (hikeData!["bundle"] == true) {
           destinations = parseDestinations(_currentBundleCoordinates());
           showUndo = hikeData!["hasUndoableCompletions"] == true;
+          debugPrint('[hike] received bundle, currentIndex=${hikeData!["currentIndex"]}');
         } else {
           destinations = parseDestinations(hikeData!["data"]["coordinates"]);
           showUndo = hikeData!["data"]["hasUndoableCompletions"] == true;
+          debugPrint('[hike] received type=${hikeData!["type"]} dataKeys=${(hikeData!["data"] as Map?)?.keys.toList()}');
+        }
+
+        // A destination flagged skip_location_check bypasses the GPS-radius
+        // wait. With confirmByUser the "Volgende" button shows immediately;
+        // without it we auto-advance just below (pure pass-through screen).
+        skipDest = _skipCheckDestination();
+        if (skipDest != null && skipDest!.confirmByUser) {
+          reachedLocationId = skipDest!.id;
+          showConfirm = true;
+          debugPrint('[hike] skipLocationCheck + confirmByUser — show Volgende, dest=$reachedLocationId');
         }
       });
-    });
-    socketConnection.sendJson({'endpoint': 'newLocation'});
+
+      if (showConfirm) {
+        // skip + confirmByUser: waiting for the user to tap "Volgende".
+      } else if (skipDest != null) {
+        // skip without confirmByUser: pure pass-through — advance at once.
+        // Fire-and-forget like setupLocationThings(): the await inside
+        // _sendConfirmAndAdvance yields first, so this receiveHikeData()
+        // finishes (clearing _fetchingHikeData) before resetHikeData()
+        // re-enters and fetches the next part.
+        debugPrint('[hike] skipLocationCheck auto-advance, dest=${skipDest!.id}');
+        _sendConfirmAndAdvance(skipDest!.id);
+      } else {
+        setupLocationThings();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Geen reactie van server. Probeer opnieuw.'),
+            action: SnackBarAction(
+              label: 'Opnieuw',
+              onPressed: receiveHikeData,
+            ),
+          ),
+        );
+      }
+    } finally {
+      _fetchingHikeData = false;
+    }
   }
 
   Future destinationReached(destinations) {
@@ -170,9 +277,44 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
         showConfirm = destination.confirmByUser;
       });
     } else {
-      socketConnection.sendJson(locationConfirmdData(destination.id));
-      resetHikeData();
+      await _sendConfirmAndAdvance(destination.id);
     }
+  }
+
+  /// Tapped by the "Volgende" button. Ensures the socket is actually connected
+  /// + authenticated before sending the confirm — otherwise the message would
+  /// silently drop on a half-open socket during a reconnect window.
+  Future<void> _confirmDestination() async {
+    if (_isConfirming) return;
+    setState(() => _isConfirming = true);
+    debugPrint('[hike] confirmDestination tap, destination=$reachedLocationId');
+    try {
+      await _sendConfirmAndAdvance(reachedLocationId);
+    } catch (e) {
+      debugPrint('[hike] confirm failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Bevestigen mislukt. Probeer opnieuw.'),
+            action: SnackBarAction(
+              label: 'Opnieuw',
+              onPressed: _confirmDestination,
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isConfirming = false);
+    }
+  }
+
+  Future<void> _sendConfirmAndAdvance(int? destinationId) async {
+    await _ensureConnectedAndAuthenticated();
+    debugPrint('[hike] sending destinationConfirmed id=$destinationId');
+    socketConnection.sendJson(locationConfirmdData(destinationId));
+    // Only after the send did NOT throw do we clear local state and ask for
+    // the next routepart. resetHikeData() chains into receiveHikeData().
+    resetHikeData();
   }
 
   void verifyUndoCompletion() async {
@@ -224,22 +366,26 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
   }
 
   Future<void> _ensureConnectedAndAuthenticated() async {
-    // 1) Wacht tot de socket echt verbonden is
+    // 1) Wait for the LIVE socket state — not the one-shot Completer.
+    //    onConnected fires once and stays completed forever, so it would
+    //    happily return mid-reconnect.
     try {
-      await socketConnection.onConnected.timeout(const Duration(seconds: 5));
+      await socketConnection.waitUntilConnected();
     } catch (_) {
-      // fallback: forceer reconnect en wacht opnieuw
+      debugPrint('[hike] socket not connected, forcing reconnect()');
       socketConnection.reconnect();
-      await socketConnection.onConnected.timeout(const Duration(seconds: 5));
+      await socketConnection.waitUntilConnected();
     }
 
-    // 2) Check of we al geauthenticeerd zijn; zo niet, doe dat met de opgeslagen authStr
+    // 2) Re-auth if needed. reconnect() resets authResult, so this triggers
+    //    after a screen-resume reconnect too.
     if (!socketConnection.isAuthenticated()) {
       final authStr = await LocalStorage.getString("authStr");
       if (authStr == null || authStr.trim().isEmpty) {
         throw Exception('Geen opgeslagen teamcode gevonden');
       }
 
+      debugPrint('[hike] not authenticated, re-authenticating');
       final ok = await socketConnection.authenticate(authStr.trim())
           .timeout(const Duration(seconds: 6));
       if (!ok) {
@@ -259,10 +405,8 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
       // Zorg dat we verbonden én geauthenticeerd zijn
       await _ensureConnectedAndAuthenticated();
 
-      // UI/data verversen
+      // UI/data verversen — resetHikeData triggert receiveHikeData zelf
       resetHikeData();
-      await Future.delayed(const Duration(milliseconds: 50)); // laat de UI even ademhalen
-      receiveHikeData();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -394,40 +538,118 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
 
 
 
+  /// Dispatch the non-bundle route renderer with a defensive null-check.
+  /// Previously a direct `hikeTypeWidgets[type](data, destinations)` call
+  /// would throw "method 'call' was called on null" when [type] was missing
+  /// from the dispatch map, hanging the screen on a cryptic red error box.
+  Widget _renderSinglePart() {
+    final type = hikeData!["type"];
+    final renderer = hikeTypeWidgets[type];
+    if (renderer == null) {
+      final data = hikeData!["data"];
+      final keys = data is Map ? data.keys.toList() : null;
+      debugPrint('[hike] unknown route type=$type, dataKeys=$keys');
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'Onbekend routedeel-type: "$type".\n'
+            'Vernieuw via ↻ rechtsboven, of neem contact op met de organisatie.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.black54),
+          ),
+        ),
+      );
+    }
+    return renderer(hikeData!["data"], destinations);
+  }
+
+  /// Shown when the server reports no more open routeparts (data:null).
+  /// Replaces the old behaviour where the screen spun forever with a
+  /// misleading "Geen reactie van server" snackbar. Logout/herverbinden zit
+  /// al in de AppBar; "terug naar vorige post" hergebruikt de bestaande
+  /// (server-bewaakte) undo-flow.
+  Widget _buildFinishedView(ColorScheme scheme) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.emoji_events, size: 72, color: scheme.primary),
+            const SizedBox(height: 16),
+            const Text(
+              'Tocht voltooid! 🎉',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Jullie hebben alle routedelen afgerond. Goed gedaan!',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.black54),
+            ),
+            const SizedBox(height: 24),
+            OutlinedButton.icon(
+              onPressed: verifyUndoCompletion,
+              icon: const Icon(Icons.undo),
+              label: const Text('Toch terug naar de vorige post'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // if not hike data: recieve
-    if (hikeData == null) {
-      receiveHikeData();
-      return loadingWidget();
-    }
-
-    setupLocationThings();
-
     final scheme = Theme.of(context).colorScheme;
+    final bool isLoading = hikeData == null && !_hikeFinished;
 
-    //Confirm button
-    bool isConfirming = false; // Track whether confirmation is in progress
+    // Confirm button — uses _isConfirming (State field) so the disabled state
+    // survives rebuilds triggered by the GPS/message streams.
+    // For a gallery the label says "Door met de route" (+ walk icon) so users
+    // don't read "Volgende" as "next photo" — swiping/arrows do that.
+    final bool isGalleryPart = _currentPartType() == "gallery";
     FloatingActionButton confirmButton = FloatingActionButton.extended(
-      onPressed: !isConfirming
-          ? () async {
-              setState(() {
-                isConfirming = true;
-              });
-
-              socketConnection.sendJson(locationConfirmdData(reachedLocationId));
-              //hier willen we eigenlijk een bevestiging terug en dan pas de state wijzigen
-              setState(() {
-                isConfirming = false;
-                resetHikeData();
-              });
-            }
-          : null,
-      label: const Text('Volgende'),
-      icon: const Icon(Icons.thumb_up),
-      backgroundColor: isConfirming ? scheme.surfaceContainerHighest : scheme.primary,
-      foregroundColor: isConfirming ? scheme.onSurface : scheme.onPrimary,
+      onPressed: _isConfirming ? null : _confirmDestination,
+      label: Text(isGalleryPart ? 'Door met de route' : 'Volgende'),
+      icon: Icon(isGalleryPart ? Icons.directions_walk : Icons.thumb_up),
+      backgroundColor: _isConfirming ? scheme.surfaceContainerHighest : scheme.primary,
+      foregroundColor: _isConfirming ? scheme.onSurface : scheme.onPrimary,
     );
+
+    final Widget body = _hikeFinished
+        ? _buildFinishedView(scheme)
+        : isLoading
+        ? const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text(
+                  'Routegegevens ophalen…',
+                  style: TextStyle(color: Colors.black54),
+                ),
+                SizedBox(height: 8),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 32),
+                  child: Text(
+                    'Lukt het niet? Tik rechtsboven op het ↻-icoon om opnieuw te verbinden.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.black45, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          )
+        : _isBundle
+            ? BundleView(
+                bundleData: hikeData!,
+                currentDestinations: destinations.cast<Destination>(),
+              )
+            : _renderSinglePart();
         
         
 
@@ -539,13 +761,8 @@ class _HikePageState extends State<HikePage> with WidgetsBindingObserver {
         backgroundColor: scheme.primary,
         foregroundColor: scheme.onPrimary,
       ),
-      body: _isBundle
-          ? BundleView(
-              bundleData: hikeData!,
-              currentDestinations: destinations.cast<Destination>(),
-            )
-          : hikeTypeWidgets[hikeData!["type"]](hikeData!["data"], destinations),
-      floatingActionButton: (showConfirm ? confirmButton : null),
+      body: body,
+      floatingActionButton: (!isLoading && showConfirm ? confirmButton : null),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
