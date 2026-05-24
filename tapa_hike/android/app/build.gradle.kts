@@ -67,3 +67,11 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // EdgeToEdge (androidx.activity 1.8+) is the SDK 35 compat shim used in
+    // MainActivity.onCreate to silence the deprecated Window.setStatusBarColor
+    // / setNavigationBarColor warnings. Not pulled transitively by the
+    // Flutter Gradle plugin, so declare it explicitly.
+    implementation("androidx.activity:activity-ktx:1.9.0")
+}
