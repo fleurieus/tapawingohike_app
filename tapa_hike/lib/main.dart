@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:tapa_hike/theme.dart';
 import 'package:tapa_hike/services/socket.dart';
@@ -10,6 +11,16 @@ import 'package:tapa_hike/pages/hike.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Android 15 edge-to-edge: let the system draw content behind the status
+  // and navigation bars, and stop the engine from setting opaque bar colors
+  // via the (deprecated on SDK 35) Window.setStatusBarColor / etc. Paired
+  // with EdgeToEdge.enable(this) in MainActivity.kt.
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarDividerColor: Colors.transparent,
+  ));
 
   // On iOS, configure the audio session so the destination chime can play
   // while the app is in the background or the device is locked. Android
