@@ -36,7 +36,8 @@ C. **Notificaties / berichten**
         "coordinate": {
             "latitude": 51.12345,
             "longitude": 4.56789,
-            "radius": 15  
+            "radius": 15,
+            "confirmByUser": true
         }  
     }
 }
@@ -53,7 +54,8 @@ C. **Notificaties / berichten**
         "coordinate": {
             "latitude": 51.12345,
             "longitude": 4.56789,
-            "radius": 15
+            "radius": 15,
+            "confirmByUser": true
         }
     }
 }
@@ -70,7 +72,8 @@ C. **Notificaties / berichten**
         "coordinate": {
             "latitude": 51.12345,
             "longitude": 4.56789,
-            "radius": 15
+            "radius": 15,
+            "confirmByUser": true
         }
     }
 }
